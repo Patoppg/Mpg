@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MPG Multi-Task Organizer v12</title>
+    <title>MPG Multi-Task Organizer v13</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -25,24 +25,27 @@
         .btn-del-single { background: #f44336; color: white; border: none; padding: 2px 6px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 10px; }
         .popup-del-link { color: #f44336; font-weight: bold; cursor: pointer; display: block; margin-top: 5px; text-decoration: underline; }
         #map { width: 100%; height: 380px; border-radius: 8px; border: 2px solid #444; background: #222; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
-        th, td { border: 1px solid #555; padding: 8px; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th, td { border: 1px solid #555; padding: 6px; text-align: center; }
         th { background: #333; }
-        .penale-input { width: 50px; padding: 4px; background: #1e1e1e; color: white; border: 1px solid #666; text-align: center; border-radius: 3px; }
+        .penale-input, .dekl-input { padding: 4px; background: #1e1e1e; color: white; border: 1px solid #666; text-align: center; border-radius: 3px; }
+        .penale-input { width: 45px; } .dekl-input { width: 65px; }
         #qrcode-container { display: none; text-align: center; background: white; padding: 15px; border-radius: 8px; margin-top: 10px; }
         #qrcode-container img { margin: 0 auto; }
         .kontrola-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #333; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
         .kontrola-input { width: 60px; padding: 5px; border-radius: 4px; border: 1px solid #555; background: #222; color: white; text-align: center; font-weight: bold; font-size: 16px; }
+        .point-breakdown { font-size: 11px; color: #aaa; display: block; margin-top: 2px; }
         @media print {
             body { background: #fff; color: #000; padding: 0; margin: 0; }
             .card, #status-kreslenia, .btn-group, label, #debug-log, .file-label, .kontrola-box { display: none !important; }
             #leaderboard-box { display: block !important; border: none; box-shadow: none; }
             table { font-size: 12px; color: black; } th, td { border: 1px solid #ccc; }
+            .dekl-input, .penale-input { border: none; background: transparent; color: black; font-weight: bold; }
         }
     </style>
 </head>
 <body>
-    <div id="debug-log">🏆 VERZIA 12 PRO ORGANIZER (Počítadlo súborov, Leaderboard, CSV)</div>
+    <div id="debug-log">🏆 VERZIA 13 PRO (Deklarácia času + Auto-Bodovanie)</div>
     
     <div class="card">
         <h2>🧭 Tvorba a správa trate</h2>
@@ -71,19 +74,18 @@
     <div class="card">
         <h3>📥 Nahrávanie a vyhodnotenie letov</h3>
         
-        <!-- Nový ovládací panel pre počet pretekárov -->
         <div class="kontrola-box">
             <label>Počet pretekárov:</label>
-            <input type="number" id="pocet-pretekarov" class="kontrola-input" value="0" min="0">
+            <input type="number" id="pocet-pretekarov" class="kontrola-input" value="0" min="0" onchange="vyhodnotStatus()">
             <span id="upload-status" style="font-weight: bold; font-size: 14px; color: #aaa;">Zatiaľ nenahraté žiadne lety</span>
         </div>
 
-        <label for="igc-input" class="file-label">📂 VYBRAŤ A NAHRAŤ IGC SÚBORY (Vyber všetky naraz)</label>
+        <label for="igc-input" class="file-label">📂 VYBRAŤ A NAHRAŤ IGC SÚBORY</label>
         <input type="file" id="igc-input" accept=".igc" multiple>
     </div>
 
-    <div class="card" id="leaderboard-box" style="display:none;">
-        <h3>🏆 Výsledková listina (Leaderboard)</h3>
+    <div class="card" id="leaderboard-box" style="display:none; overflow-x: auto;">
+        <h3>🏆 Výsledková listina</h3>
         <div class="btn-group" style="margin-bottom: 10px;">
             <button class="btn btn-export-csv" onclick="exportovatDoCSV()">Stiahnuť CSV (Excel) 📊</button>
             <button class="btn btn-export-img" onclick="window.print()">Tlačiť výsledky 🖨️</button>
@@ -134,11 +136,12 @@
             });
             let html = '<ul>'; mojeOtocneBody.forEach((b, i) => { html += `<li><strong>${i+1}. ${b.nazov}</strong> <button class="btn-del-single" onclick="zmazatBod(${i})">X</button></li>`; });
             document.getElementById('zoznam-bodov').innerHTML = html + '</ul>';
+            vykresliLeaderboard(); // Prepočítať max body ak sa pridá/zmaže bod
         }
 
         window.zmazatBod = function(i) { mojeOtocneBody.splice(i, 1); prekresliVsetkyBody(); }
-        function ulozitTratDoPamate() { const meno = document.getElementById('task-name-input').value; if(!meno) return; vsetkyTrate[meno] = mojeOtocneBody; localStorage.setItem('mpg_trate_v12', JSON.stringify(vsetkyTrate)); vykresliZoznamUlozenychTrati(); }
-        function nacitatVsetkyTrateZPamate() { const d = localStorage.getItem('mpg_trate_v12'); if (d) { vsetkyTrate = JSON.parse(d); vykresliZoznamUlozenychTrati(); } }
+        function ulozitTratDoPamate() { const meno = document.getElementById('task-name-input').value; if(!meno) return; vsetkyTrate[meno] = mojeOtocneBody; localStorage.setItem('mpg_trate_v13', JSON.stringify(vsetkyTrate)); vykresliZoznamUlozenychTrati(); }
+        function nacitatVsetkyTrateZPamate() { const d = localStorage.getItem('mpg_trate_v13'); if (d) { vsetkyTrate = JSON.parse(d); vykresliZoznamUlozenychTrati(); } }
         function vykresliZoznamUlozenychTrati() { const ul = document.getElementById('ulozene-trate-list'); ul.innerHTML = ""; Object.keys(vsetkyTrate).forEach(m => { const li = document.createElement('li'); li.className = 'track-item'; li.innerText = m; li.onclick = () => { mojeOtocneBody = vsetkyTrate[m]; prekresliVsetkyBody(); }; ul.appendChild(li); }); }
         function vynulovatTrat() { mojeOtocneBody = []; prekresliVsetkyBody(); document.getElementById('qrcode-container').style.display="none"; }
 
@@ -201,10 +204,15 @@
                 let casBase = 0; let maCas = false;
                 if(casyPreletov.length >= 2) { casBase = Math.max(...casyPreletov) - Math.min(...casyPreletov); maCas = true; }
                 
-                vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: maCas });
+                vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: maCas, deklarovanyText: "", deklarovanySec: 0 });
             });
             
-            // Kontrola poctu letov
+            vyhodnotStatus();
+            if(flightPolylines.length > 0) map.fitBounds(flightPolylines[0].getBounds());
+            vykresliLeaderboard();
+        });
+
+        window.vyhodnotStatus = function() {
             const pocetCakanych = parseInt(document.getElementById('pocet-pretekarov').value) || 0;
             const pocetNahratych = vysledkyPiloti.length;
             const statusEl = document.getElementById('upload-status');
@@ -224,34 +232,31 @@
                 statusEl.innerHTML = `✅ Nahraté lety: ${pocetNahratych}`;
                 statusEl.style.color = '#4caf50';
             }
+        }
 
-            if(flightPolylines.length > 0) map.fitBounds(flightPolylines[0].getBounds());
+        // Výpočet bodov z deklarovaného času (Max 15, -1 bod za každú začatú minútu rozdielu)
+        function vypocitajBodyZCasu(realnyCas, deklarovanyCas) {
+            if (!deklarovanyCas || deklarovanyCas <= 0) return 0;
+            let diff = Math.abs(realnyCas - deklarovanyCas);
+            let strateneBody = Math.floor(diff / 60);
+            let body = 15 - strateneBody;
+            return body > 0 ? body : 0;
+        }
+
+        // Konverzia MM:SS textu na sekundy
+        window.zmenDeklarovany = function(index, text) {
+            vysledkyPiloti[index].deklarovanyText = text;
+            let sec = 0;
+            if (text) {
+                let parts = text.split(':');
+                if (parts.length === 2) {
+                    sec = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+                } else {
+                    sec = parseInt(text) * 60; // ak by zadali len minuty
+                }
+            }
+            vysledkyPiloti[index].deklarovanySec = isNaN(sec) ? 0 : sec;
             vykresliLeaderboard();
-        });
-
-        function vykresliLeaderboard() {
-            document.getElementById('leaderboard-box').style.display = "block";
-            vysledkyPiloti.sort((a, b) => {
-                if (b.splnene !== a.splnene) return b.splnene - a.splnene;
-                const casA = a.maCas ? (a.casBase + a.penale) : Infinity; const casB = b.maCas ? (b.casBase + b.penale) : Infinity;
-                return casA - casB;
-            });
-
-            let html = `<table><tr><th>#</th><th>Pilot</th><th>Body/Brány</th><th>Čas letu</th><th>Penále (s)</th><th>Celkový čas</th></tr>`;
-            vysledkyPiloti.forEach((p, i) => {
-                let celkovy = p.maCas ? formatCas(p.casBase + p.penale) : "Nedokončil";
-                let casL = p.maCas ? formatCas(p.casBase) : "-";
-                html += `<tr>
-                    <td>${i+1}</td>
-                    <td><b>${p.meno}</b></td>
-                    <td>${p.splnene} / ${mojeOtocneBody.length}</td>
-                    <td>${casL}</td>
-                    <td><input type="number" class="penale-input" value="${p.penale}" onchange="zmenPenale(${i}, this.value)"></td>
-                    <td style="font-weight:bold; color:#ff9800;">${celkovy}</td>
-                </tr>`;
-            });
-            html += `</table>`;
-            document.getElementById('leaderboard-table-container').innerHTML = html;
         }
 
         window.zmenPenale = function(index, val) {
@@ -259,11 +264,63 @@
             vykresliLeaderboard();
         }
 
+        function vykresliLeaderboard() {
+            if(vysledkyPiloti.length === 0) return;
+            document.getElementById('leaderboard-box').style.display = "block";
+            
+            // Dočasné priradenie celkových bodov pre sortovanie
+            vysledkyPiloti.forEach(p => {
+                let realnyCas = p.maCas ? (p.casBase + p.penale) : 0;
+                p.bodyCas = p.maCas ? vypocitajBodyZCasu(realnyCas, p.deklarovanySec) : 0;
+                p.bodySpolu = p.splnene + p.bodyCas; // 1 otočák = 1 bod
+            });
+
+            // Zoradenie: Primárne podľa celkových bodov (zostupne), Sekundárne podľa dosiahnutého času (vzostupne)
+            vysledkyPiloti.sort((a, b) => {
+                if (b.bodySpolu !== a.bodySpolu) return b.bodySpolu - a.bodySpolu;
+                const casA = a.maCas ? (a.casBase + a.penale) : Infinity;
+                const casB = b.maCas ? (b.casBase + b.penale) : Infinity;
+                return casA - casB;
+            });
+
+            let html = `<table><tr>
+                <th>#</th>
+                <th>Pilot</th>
+                <th>Preletené<br>otočáky</th>
+                <th>Čas letu</th>
+                <th>Deklar. čas<br><small>(mm:ss)</small></th>
+                <th>Penále (s)</th>
+                <th>Finálny čas</th>
+                <th style="color:#4caf50;">CELKOM BODY</th>
+            </tr>`;
+            
+            vysledkyPiloti.forEach((p, i) => {
+                let celkovy = p.maCas ? formatCas(p.casBase + p.penale) : "Nedokončil";
+                let casL = p.maCas ? formatCas(p.casBase) : "-";
+                
+                html += `<tr>
+                    <td>${i+1}</td>
+                    <td><b>${p.meno}</b></td>
+                    <td>${p.splnene} / ${mojeOtocneBody.length} <br><span class="point-breakdown">(+${p.splnene}b)</span></td>
+                    <td>${casL}</td>
+                    <td><input type="text" class="dekl-input" placeholder="mm:ss" value="${p.deklarovanyText}" onchange="zmenDeklarovany(${i}, this.value)"></td>
+                    <td><input type="number" class="penale-input" value="${p.penale}" onchange="zmenPenale(${i}, this.value)"></td>
+                    <td style="font-weight:bold; color:#ff9800;">${celkovy}</td>
+                    <td style="font-size:16px; font-weight:bold; color:#4caf50;">${p.bodySpolu} <br><span class="point-breakdown">(Otočáky: ${p.splnene} | Čas: ${p.bodyCas})</span></td>
+                </tr>`;
+            });
+            html += `</table>`;
+            document.getElementById('leaderboard-table-container').innerHTML = html;
+        }
+
         window.exportovatDoCSV = function() {
-            let csv = "\uFEFFPoradie;Pilot;Splnene body;Cisty cas (s);Penalizacia (s);Celkovy cas (s)\n";
-            vysledkyPiloti.forEach((p, i) => { let celk = p.maCas ? (p.casBase + p.penale) : "N/A"; csv += `${i+1};${p.meno};${p.splnene};${p.casBase};${p.penale};${celk}\n`; });
+            let csv = "\uFEFFPoradie;Pilot;Otocaky (Body);Cisty cas letu (s);Deklarovany cas (s);Penalizacia (s);Celkovy cas (s);Body za cas;CELKOVE BODY\n";
+            vysledkyPiloti.forEach((p, i) => { 
+                let celk = p.maCas ? (p.casBase + p.penale) : "N/A"; 
+                csv += `${i+1};${p.meno};${p.splnene};${p.casBase};${p.deklarovanySec};${p.penale};${celk};${p.bodyCas};${p.bodySpolu}\n`; 
+            });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob); a.download = "Vysledky_Task.csv"; a.click();
+            a.href = URL.createObjectURL(blob); a.download = "Vysledky_Task_Body.csv"; a.click();
         }
 
         inicializujMapu();
