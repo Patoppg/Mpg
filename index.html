@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MPG Multi-Task Organizer v13</title>
+    <title>MPG Multi-Task Organizer v14</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -45,7 +45,7 @@
     </style>
 </head>
 <body>
-    <div id="debug-log">🏆 VERZIA 13 PRO (Deklarácia času + Auto-Bodovanie)</div>
+    <div id="debug-log">🏆 VERZIA 14 PRO (Matematické zaokrúhľovanie minút)</div>
     
     <div class="card">
         <h2>🧭 Tvorba a správa trate</h2>
@@ -73,13 +73,11 @@
 
     <div class="card">
         <h3>📥 Nahrávanie a vyhodnotenie letov</h3>
-        
         <div class="kontrola-box">
             <label>Počet pretekárov:</label>
             <input type="number" id="pocet-pretekarov" class="kontrola-input" value="0" min="0" onchange="vyhodnotStatus()">
             <span id="upload-status" style="font-weight: bold; font-size: 14px; color: #aaa;">Zatiaľ nenahraté žiadne lety</span>
         </div>
-
         <label for="igc-input" class="file-label">📂 VYBRAŤ A NAHRAŤ IGC SÚBORY</label>
         <input type="file" id="igc-input" accept=".igc" multiple>
     </div>
@@ -94,8 +92,8 @@
     </div>
 
     <script>
-        let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
-        let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
+        let mojeOtocneBody = [], mapMarkers = [], mapVisuals = [], flightPolylines = [], vsetkyTrate = {};
+        let vysledkyPiloti = [], rezimKresleniaBrany = false, docasnyNazovBrany = "", prvyBodBrany = null, docasnyMarker = null, map = null;
         
         function inicializujMapu() {
             map = L.map('map').setView([48.6, 19.5], 8);
@@ -105,7 +103,7 @@
         }
         
         function mapClickAction(e) {
-            const lat = e.latlng.lat; const lon = e.latlng.lng;
+            const lat = e.latlng.lat, lon = e.latlng.lng;
             if (rezimKresleniaBrany) {
                 if (docasnyMarker) map.removeLayer(docasnyMarker);
                 document.getElementById('status-kreslenia').style.display = "none"; rezimKresleniaBrany = false;
@@ -136,77 +134,45 @@
             });
             let html = '<ul>'; mojeOtocneBody.forEach((b, i) => { html += `<li><strong>${i+1}. ${b.nazov}</strong> <button class="btn-del-single" onclick="zmazatBod(${i})">X</button></li>`; });
             document.getElementById('zoznam-bodov').innerHTML = html + '</ul>';
-            vykresliLeaderboard(); // Prepočítať max body ak sa pridá/zmaže bod
+            vykresliLeaderboard();
         }
 
         window.zmazatBod = function(i) { mojeOtocneBody.splice(i, 1); prekresliVsetkyBody(); }
-        function ulozitTratDoPamate() { const meno = document.getElementById('task-name-input').value; if(!meno) return; vsetkyTrate[meno] = mojeOtocneBody; localStorage.setItem('mpg_trate_v13', JSON.stringify(vsetkyTrate)); vykresliZoznamUlozenychTrati(); }
-        function nacitatVsetkyTrateZPamate() { const d = localStorage.getItem('mpg_trate_v13'); if (d) { vsetkyTrate = JSON.parse(d); vykresliZoznamUlozenychTrati(); } }
+        function ulozitTratDoPamate() { const meno = document.getElementById('task-name-input').value; if(!meno) return; vsetkyTrate[meno] = mojeOtocneBody; localStorage.setItem('mpg_trate_v14', JSON.stringify(vsetkyTrate)); vykresliZoznamUlozenychTrati(); }
+        function nacitatVsetkyTrateZPamate() { const d = localStorage.getItem('mpg_trate_v14'); if (d) { vsetkyTrate = JSON.parse(d); vykresliZoznamUlozenychTrati(); } }
         function vykresliZoznamUlozenychTrati() { const ul = document.getElementById('ulozene-trate-list'); ul.innerHTML = ""; Object.keys(vsetkyTrate).forEach(m => { const li = document.createElement('li'); li.className = 'track-item'; li.innerText = m; li.onclick = () => { mojeOtocneBody = vsetkyTrate[m]; prekresliVsetkyBody(); }; ul.appendChild(li); }); }
         function vynulovatTrat() { mojeOtocneBody = []; prekresliVsetkyBody(); document.getElementById('qrcode-container').style.display="none"; }
-
-        function zobrazitQR() {
-            const qrBox = document.getElementById('qrcode-container');
-            qrBox.innerHTML = "<h4 style='color:black; margin-top:0;'>Naskenuj pre body</h4>";
-            const minified = mojeOtocneBody.map(b => `${b.nazov}|${b.lat.toFixed(5)}|${b.lon.toFixed(5)}`).join(';');
-            new QRCode(qrBox, { text: minified, width: 200, height: 200 });
-            qrBox.style.display = "block";
-        }
+        function zobrazitQR() { const qrBox = document.getElementById('qrcode-container'); qrBox.innerHTML = "<h4 style='color:black; margin-top:0;'>Naskenuj pre body</h4>"; const minified = mojeOtocneBody.map(b => `${b.nazov}|${b.lat.toFixed(5)}|${b.lon.toFixed(5)}`).join(';'); new QRCode(qrBox, { text: minified, width: 200, height: 200 }); qrBox.style.display = "block"; }
 
         function parseCoord(str, isLon) { let d = parseFloat(str.substring(0, isLon ? 3 : 2)); let m = parseFloat(str.substring(isLon ? 3 : 2)) / 60000; return d + m; }
         function getDist(lat1, lon1, lat2, lon2) { const R=6371000; const dLat=(lat2-lat1)*Math.PI/180; const dLon=(lon2-lon1)*Math.PI/180; const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2); return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
         function ciarySaPretinaju(A,B,C,D) { function ccw(p1,p2,p3){return(p3[0]-p1[0])*(p2[1]-p1[1])>(p2[0]-p1[0])*(p3[1]-p1[1]);} return(ccw(A,C,D)!==ccw(B,C,D))&&(ccw(A,B,C)!==ccw(A,B,D)); }
         function formatCas(s) { const h = Math.floor(s/3600); const m = Math.floor((s%3600)/60); const sec = s%60; return (h>0?h+"h ":"")+m+"m "+sec+"s"; }
 
-        const citajSubor = (file) => new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve({ text: e.target.result, file: file.name });
-            reader.readAsText(file);
-        });
+        const citajSubor = (file) => new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => resolve({ text: e.target.result, file: file.name }); reader.readAsText(file); });
 
         document.getElementById('igc-input').addEventListener('change', async function(e) {
             const files = Array.from(e.target.files); if (files.length === 0) return;
             vysledkyPiloti = []; flightPolylines.forEach(pl => map.removeLayer(pl)); flightPolylines = [];
-            
             const results = await Promise.all(files.map(f => citajSubor(f)));
-            
             results.forEach(res => {
                 let menoPilota = res.file.replace('.igc',''); let trackPoints = [];
                 res.text.split(/\r?\n/).forEach(r => {
-                    if (r.startsWith('H') && r.toUpperCase().includes('PILOT')) {
-                        const idx = r.indexOf(':'); if(idx !== -1) { let mozne = r.substring(idx+1).trim(); if(mozne) menoPilota = mozne; }
-                    }
-                    if (r.startsWith('B') && r.length >= 24) {
-                        const cStr = r.substring(1, 7); const lat = parseCoord(r.substring(7, 15), false); const lon = parseCoord(r.substring(15, 24), true);
-                        const sec = parseInt(cStr.substring(0,2))*3600 + parseInt(cStr.substring(2,4))*60 + parseInt(cStr.substring(4,6));
-                        trackPoints.push({ lat: lat, lon: lon, sekundy: sec });
-                    }
+                    if (r.startsWith('H') && r.toUpperCase().includes('PILOT')) { const idx = r.indexOf(':'); if(idx !== -1) { let mozne = r.substring(idx+1).trim(); if(mozne) menoPilota = mozne; } }
+                    if (r.startsWith('B') && r.length >= 24) { const cStr = r.substring(1, 7); const lat = parseCoord(r.substring(7, 15), false); const lon = parseCoord(r.substring(15, 24), true); const sec = parseInt(cStr.substring(0,2))*3600 + parseInt(cStr.substring(2,4))*60 + parseInt(cStr.substring(4,6)); trackPoints.push({ lat: lat, lon: lon, sekundy: sec }); }
                 });
-
                 let pl = L.polyline(trackPoints.map(p => [p.lat, p.lon]), { color: '#' + Math.floor(Math.random()*16777215).toString(16), weight: 3, opacity: 0.7 }).addTo(map);
                 flightPolylines.push(pl);
-
                 let preletenePoradie = 0; let casyPreletov = [];
                 mojeOtocneBody.forEach(bod => {
                     let preleteny = false; let secPreletu = 0;
-                    if (bod.typ === "gate") {
-                        for (let i=1; i<trackPoints.length; i++) {
-                            if (ciarySaPretinaju([trackPoints[i-1].lat, trackPoints[i-1].lon], [trackPoints[i].lat, trackPoints[i].lon], bod.p1, bod.p2)) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; }
-                        }
-                    } else {
-                        for (let i=0; i<trackPoints.length; i++) {
-                            if (getDist(trackPoints[i].lat, trackPoints[i].lon, bod.lat, bod.lon) <= bod.rozmer) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; }
-                        }
-                    }
+                    if (bod.typ === "gate") { for (let i=1; i<trackPoints.length; i++) { if (ciarySaPretinaju([trackPoints[i-1].lat, trackPoints[i-1].lon], [trackPoints[i].lat, trackPoints[i].lon], bod.p1, bod.p2)) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; } } } 
+                    else { for (let i=0; i<trackPoints.length; i++) { if (getDist(trackPoints[i].lat, trackPoints[i].lon, bod.lat, bod.lon) <= bod.rozmer) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; } } }
                     if(preleteny) { preletenePoradie++; casyPreletov.push(secPreletu); }
                 });
-
-                let casBase = 0; let maCas = false;
-                if(casyPreletov.length >= 2) { casBase = Math.max(...casyPreletov) - Math.min(...casyPreletov); maCas = true; }
-                
-                vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: maCas, deklarovanyText: "", deklarovanySec: 0 });
+                let casBase = (casyPreletov.length >= 2) ? Math.max(...casyPreletov) - Math.min(...casyPreletov) : 0;
+                vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: (casyPreletov.length >= 2), deklarovanyText: "", deklarovanySec: 0 });
             });
-            
             vyhodnotStatus();
             if(flightPolylines.length > 0) map.fitBounds(flightPolylines[0].getBounds());
             vykresliLeaderboard();
@@ -216,111 +182,55 @@
             const pocetCakanych = parseInt(document.getElementById('pocet-pretekarov').value) || 0;
             const pocetNahratych = vysledkyPiloti.length;
             const statusEl = document.getElementById('upload-status');
-            
             if (pocetCakanych > 0) {
-                if (pocetNahratych === pocetCakanych) {
-                    statusEl.innerHTML = `✅ Výborne! Nahraté sú všetky lety (${pocetNahratych} z ${pocetCakanych})`;
-                    statusEl.style.color = '#4caf50';
-                } else if (pocetNahratych < pocetCakanych) {
-                    statusEl.innerHTML = `⚠️ Pozor, chýbajú lety! Nahratých je len ${pocetNahratych} z ${pocetCakanych}`;
-                    statusEl.style.color = '#ff9800';
-                } else {
-                    statusEl.innerHTML = `❓ Nahratých je viac letov ako bolo zadané pretekárov (${pocetNahratych} z ${pocetCakanych})`;
-                    statusEl.style.color = '#e91e63';
-                }
-            } else {
-                statusEl.innerHTML = `✅ Nahraté lety: ${pocetNahratych}`;
-                statusEl.style.color = '#4caf50';
-            }
+                if (pocetNahratych === pocetCakanych) { statusEl.innerHTML = `✅ Výborne! Nahraté sú všetky lety (${pocetNahratych} z ${pocetCakanych})`; statusEl.style.color = '#4caf50'; } 
+                else if (pocetNahratych < pocetCakanych) { statusEl.innerHTML = `⚠️ Pozor, chýbajú lety! Nahratých je len ${pocetNahratych} z ${pocetCakanych}`; statusEl.style.color = '#ff9800'; }
+            } else { statusEl.innerHTML = `✅ Nahraté lety: ${pocetNahratych}`; statusEl.style.color = '#4caf50'; }
         }
 
-        // Výpočet bodov z deklarovaného času (Max 15, -1 bod za každú začatú minútu rozdielu)
+        // MATEMATICKÉ ZAOKRÚHLENIE: 0-29s = 0b, 30-59s = 1b
         function vypocitajBodyZCasu(realnyCas, deklarovanyCas) {
             if (!deklarovanyCas || deklarovanyCas <= 0) return 0;
             let diff = Math.abs(realnyCas - deklarovanyCas);
-            let strateneBody = Math.floor(diff / 60);
+            let strateneBody = Math.round(diff / 60); 
             let body = 15 - strateneBody;
             return body > 0 ? body : 0;
         }
 
-        // Konverzia MM:SS textu na sekundy
         window.zmenDeklarovany = function(index, text) {
             vysledkyPiloti[index].deklarovanyText = text;
-            let sec = 0;
-            if (text) {
-                let parts = text.split(':');
-                if (parts.length === 2) {
-                    sec = parseInt(parts[0]) * 60 + parseInt(parts[1]);
-                } else {
-                    sec = parseInt(text) * 60; // ak by zadali len minuty
-                }
-            }
+            let parts = text.split(':');
+            let sec = (parts.length === 2) ? (parseInt(parts[0]) * 60 + parseInt(parts[1])) : parseInt(text) * 60;
             vysledkyPiloti[index].deklarovanySec = isNaN(sec) ? 0 : sec;
             vykresliLeaderboard();
         }
 
-        window.zmenPenale = function(index, val) {
-            vysledkyPiloti[index].penale = parseInt(val) || 0;
-            vykresliLeaderboard();
-        }
+        window.zmenPenale = function(index, val) { vysledkyPiloti[index].penale = parseInt(val) || 0; vykresliLeaderboard(); }
 
         function vykresliLeaderboard() {
             if(vysledkyPiloti.length === 0) return;
             document.getElementById('leaderboard-box').style.display = "block";
-            
-            // Dočasné priradenie celkových bodov pre sortovanie
             vysledkyPiloti.forEach(p => {
                 let realnyCas = p.maCas ? (p.casBase + p.penale) : 0;
                 p.bodyCas = p.maCas ? vypocitajBodyZCasu(realnyCas, p.deklarovanySec) : 0;
-                p.bodySpolu = p.splnene + p.bodyCas; // 1 otočák = 1 bod
+                p.bodySpolu = p.splnene + p.bodyCas;
             });
-
-            // Zoradenie: Primárne podľa celkových bodov (zostupne), Sekundárne podľa dosiahnutého času (vzostupne)
-            vysledkyPiloti.sort((a, b) => {
-                if (b.bodySpolu !== a.bodySpolu) return b.bodySpolu - a.bodySpolu;
-                const casA = a.maCas ? (a.casBase + a.penale) : Infinity;
-                const casB = b.maCas ? (b.casBase + b.penale) : Infinity;
-                return casA - casB;
-            });
-
-            let html = `<table><tr>
-                <th>#</th>
-                <th>Pilot</th>
-                <th>Preletené<br>otočáky</th>
-                <th>Čas letu</th>
-                <th>Deklar. čas<br><small>(mm:ss)</small></th>
-                <th>Penále (s)</th>
-                <th>Finálny čas</th>
-                <th style="color:#4caf50;">CELKOM BODY</th>
-            </tr>`;
-            
+            vysledkyPiloti.sort((a, b) => b.bodySpolu - a.bodySpolu || (a.maCas ? a.casBase : Infinity) - (b.maCas ? b.casBase : Infinity));
+            let html = `<table><tr><th>#</th><th>Pilot</th><th>Otočáky</th><th>Čas letu</th><th>Deklar. čas</th><th>Penále</th><th>CELKOM</th></tr>`;
             vysledkyPiloti.forEach((p, i) => {
-                let celkovy = p.maCas ? formatCas(p.casBase + p.penale) : "Nedokončil";
-                let casL = p.maCas ? formatCas(p.casBase) : "-";
-                
-                html += `<tr>
-                    <td>${i+1}</td>
-                    <td><b>${p.meno}</b></td>
-                    <td>${p.splnene} / ${mojeOtocneBody.length} <br><span class="point-breakdown">(+${p.splnene}b)</span></td>
-                    <td>${casL}</td>
-                    <td><input type="text" class="dekl-input" placeholder="mm:ss" value="${p.deklarovanyText}" onchange="zmenDeklarovany(${i}, this.value)"></td>
-                    <td><input type="number" class="penale-input" value="${p.penale}" onchange="zmenPenale(${i}, this.value)"></td>
-                    <td style="font-weight:bold; color:#ff9800;">${celkovy}</td>
-                    <td style="font-size:16px; font-weight:bold; color:#4caf50;">${p.bodySpolu} <br><span class="point-breakdown">(Otočáky: ${p.splnene} | Čas: ${p.bodyCas})</span></td>
-                </tr>`;
+                html += `<tr><td>${i+1}</td><td><b>${p.meno}</b></td><td>${p.splnene}</td><td>${p.maCas ? formatCas(p.casBase) : "-"}</td>
+                <td><input type="text" class="dekl-input" placeholder="mm:ss" value="${p.deklarovanyText}" onchange="zmenDeklarovany(${i}, this.value)"></td>
+                <td><input type="number" class="penale-input" value="${p.penale}" onchange="zmenPenale(${i}, this.value)"></td>
+                <td style="font-size:16px; font-weight:bold; color:#4caf50;">${p.bodySpolu}</td></tr>`;
             });
             html += `</table>`;
             document.getElementById('leaderboard-table-container').innerHTML = html;
         }
 
-        window.exportovatDoCSV = function() {
-            let csv = "\uFEFFPoradie;Pilot;Otocaky (Body);Cisty cas letu (s);Deklarovany cas (s);Penalizacia (s);Celkovy cas (s);Body za cas;CELKOVE BODY\n";
-            vysledkyPiloti.forEach((p, i) => { 
-                let celk = p.maCas ? (p.casBase + p.penale) : "N/A"; 
-                csv += `${i+1};${p.meno};${p.splnene};${p.casBase};${p.deklarovanySec};${p.penale};${celk};${p.bodyCas};${p.bodySpolu}\n`; 
-            });
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob); a.download = "Vysledky_Task_Body.csv"; a.click();
+        function exportovatDoCSV() {
+            let csv = "\uFEFFPoradie;Pilot;Otocaky;Cisty cas;Deklarovany;Penalizacia;Body\n";
+            vysledkyPiloti.forEach((p, i) => { csv += `${i+1};${p.meno};${p.splnene};${p.casBase};${p.deklarovanySec};${p.penale};${p.bodySpolu}\n`; });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "Vysledky.csv"; a.click();
         }
 
         inicializujMapu();
