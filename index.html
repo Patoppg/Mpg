@@ -31,86 +31,167 @@
         #map { width: 100%; height: 380px; border-radius: 8px; border: 2px solid #444; background: #222; box-sizing: border-box; }
         ul { padding-left: 20px; margin: 5px 0; }
         li { margin-bottom: 8px; }
+        @media print {
+            body { background: #fff; color: #000; padding: 0; margin: 0; }
+            .card, #status-kreslenia, .btn-group, label, #debug-log { display: none !important; }
+            #map { width: 100% !important; height: 100vh !important; border: none !important; border-radius: 0 !important; }
+            .print-header { display: block !important; color: #000 !important; padding: 10px; font-family: sans-serif; }
+        }
+        .print-header { display: none; }
     </style>
 </head>
 <body>
-    <div id="debug-log">🟢 VERZIA 10 (S podporou XCTrack mien)</div>
+    <div id="debug-log">🟢 VERZIA 10 PRO (Kompletná logika + Opravené mená)</div>
+    <div class="print-header" id="print-title-box"><h2>Súťažná mapa: Task</h2></div>
     <div class="card">
         <h2>🧭 MPG Multi-Task Scorer Pro v10</h2>
-        <label>Názov trate:</label>
+        <label>Názov trate / disciplíny:</label>
         <input type="text" id="task-name-input" class="input-text" value="Task 1">
         <div class="btn-group">
-            <button class="btn btn-save" onclick="ulozitTratDoPamate()">Uložiť 💾</button>
-            <button class="btn btn-reset" onclick="vynulovatTrat()">Vyčistiť 🔄</button>
+            <button class="btn btn-save" onclick="ulozitTratDoPamate()">Uložiť túto trať 💾</button>
+            <button class="btn btn-reset" onclick="vynulovatTrat()">Vyčistiť mapu 🔄</button>
         </div>
+        <label>Moje uložené trate:</label>
         <ul id="ulozene-trate-list" class="track-list"></ul>
     </div>
     <div class="card">
+        <h3>🖨️ Export a Tlač:</h3>
+        <div class="btn-group">
+            <button class="btn btn-export-img" onclick="tlacitMapuVysokeRozlisenie()">Tlačiť / Uložiť mapu 🖼️</button>
+            <button class="btn btn-export-kml" onclick="exportovatDoKML()">Stiahnuť GPS (KML) 🛰️</button>
+        </div>
+    </div>
+    <div id="status-kreslenia" class="drawing-status">✏️ REŽIM KRESLENIA ČIARY: Klikni na mape, kde má brána KONČIŤ!</div>
+    <div class="card">
         <h3>📍 Aktívna trať:</h3>
-        <div id="zoznam-bodov"><em style="color: #888;">Klikaj do mapy pre pridanie bodov!</em></div>
-        <label for="igc-input" class="file-label">📥 VYBRAŤ A VYHODNOTIŤ .IGC</label>
+        <div id="zoznam-bodov"><em style="color: #888;">Klikaním do mapy pridaj body!</em></div>
+        <label for="igc-input" class="file-label">📥 VYBRAŤ A VYHODNOTIŤ .IGC LET PILOTA</label>
         <input type="file" id="igc-input" accept=".igc">
     </div>
     <div class="card" id="vysledky-box" style="display:none;">
-        <h3>📊 Výsledky:</h3>
+        <h3>📊 Výsledky vyhodnotenia:</h3>
         <div id="pilot-box" class="pilot-name"></div>
         <div id="celkovy-cas-box" class="info-time"></div>
         <div id="vysledok-text"></div>
     </div>
-    <div id="map"></div>
-
+    <div class="card">
+        <h3>🗺️ Mapa disciplíny:</h3>
+        <div id="map" style="width: 100%; height: 380px;"></div>
+    </div>
     <script>
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolyline = null; let vsetkyTrate = {};
-        let map = null;
-
+        let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
+        
         function inicializujMapu() {
-            if (map) return;
-            map = L.map('map').setView([48.6, 19.5], 8);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-            nacitatVsetkyTrateZPamate();
-            map.on('click', mapClickAction);
+            const mapDiv = document.getElementById('map');
+            if (!mapDiv || !window.L) return;
+            try {
+                mapDiv.innerHTML = "";
+                map = L.map('map').setView([48.6, 19.5], 8);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+                nacitatVsetkyTrateZPamate();
+                map.on('click', mapClickAction);
+                setTimeout(() => { if(map) map.invalidateSize(); }, 200);
+            } catch (e) { console.error(e); }
         }
-
+        
         function mapClickAction(e) {
-            const lat = e.latlng.lat; const lon = e.latlng.lng;
-            const nazov = prompt("Názov bodu:", "Otočák " + (mojeOtocneBody.length + 1));
-            if (nazov === null) return;
-            const radius = parseInt(prompt("Polomer valca (m):", "100")) || 100;
-            mojeOtocneBody.push({ nazov: nazov.toUpperCase(), lat: lat, lon: lon, typ: "cylinder", rozmer: radius });
-            vykresliVsetko();
+            if (!map) return; const lat = e.latlng.lat; const lon = e.latlng.lng;
+            if (rezimKresleniaBrany) {
+                if (docasnyMarker) map.removeLayer(docasnyMarker);
+                document.getElementById('status-kreslenia').style.display = "none"; rezimKresleniaBrany = false;
+                mojeOtocneBody.push({ nazov: docasnyNazovBrany, typ: "gate", lat: (prvyBodBrany.lat + lat) / 2, lon: (prvyBodBrany.lon + lon) / 2, p1: [prvyBodBrany.lat, prvyBodBrany.lon], p2: [lat, lon] });
+                vykresliBodNaMapu(mojeOtocneBody[mojeOtocneBody.length - 1], mojeOtocneBody.length - 1); vykresliZoznamBodov(); return;
+            }
+            const cisloBodov = mojeOtocneBody.length + 1; let predvolenyNazov = "Otočák " + cisloBodov; if (cisloBodov === 1) predvolenyNazov = "START";
+            const nazov = prompt("Zadaj názov bodu:", predvolenyNazov); if (nazov === null) return; const nazovUpper = nazov.toUpperCase();
+            if (nazovUpper === "START" || nazovUpper === "CIEL") {
+                rezimKresleniaBrany = true; docasnyNazovBrany = nazovUpper; prvyBodBrany = { lat: lat, lon: lon };
+                docasnyMarker = L.circleMarker([lat, lon], { radius: 6, color: '#ff9800' }).addTo(map);
+                document.getElementById('status-kreslenia').style.display = "block";
+            } else {
+                const radiusStr = prompt("Zadaj polomer valca v metroch:", "100"); if (radiusStr === null) return;
+                const radius = parseInt(radiusStr) || 100;
+                mojeOtocneBody.push({ nazov: nazovUpper, lat: lat, lon: lon, typ: "cylinder", rozmer: radius });
+                vykresliBodNaMapu(mojeOtocneBody[mojeOtocneBody.length - 1], mojeOtocneBody.length - 1); vykresliZoznamBodov();
+            }
         }
-
-        function vykresliVsetko() {
-            mapMarkers.forEach(m => map.removeLayer(m)); mapVisuals.forEach(v => map.removeLayer(v));
-            mapMarkers = []; mapVisuals = [];
-            mojeOtocneBody.forEach((b, i) => {
-                mapMarkers.push(L.marker([b.lat, b.lon]).addTo(map).bindPopup(b.nazov));
-                mapVisuals.push(L.circle([b.lat, b.lon], { color: 'red', radius: b.rozmer }).addTo(map));
-            });
-            let html = '<ul>'; mojeOtocneBody.forEach((b, i) => { html += "<li>" + b.nazov + " <button class='btn-del-single' onclick='zmazatBod("+i+")'>X</button></li>"; });
-            document.getElementById('zoznam-bodov').innerHTML = html + '</ul>';
+        function vykresliBodNaMapu(b, index) {
+            if(!map) return; const marker = L.marker([b.lat, b.lon]).addTo(map).bindPopup("<b>" + b.nazov + "</b><br><span class=\"popup-del-link\" onclick=\"zmazatJedinyBod(" + index + ")\">🗑️ Zmazať</span>");
+            mapMarkers.push(marker);
+            if (b.typ === "gate") { mapVisuals.push(L.polyline([b.p1, b.p2], { color: '#ff9800', weight: 6 }).addTo(map)); }
+            else { mapVisuals.push(L.circle([b.lat, b.lon], { color: 'red', fillColor: '#f03', fillOpacity: 0.15, radius: b.rozmer }).addTo(map)); }
         }
-
-        window.zmazatBod = function(i) { mojeOtocneBody.splice(i, 1); vykresliVsetko(); }
-        function ulozitTratDoPamate() { const meno = document.getElementById('task-name-input').value; vsetkyTrate[meno] = mojeOtocneBody; localStorage.setItem('mpg_trate', JSON.stringify(vsetkyTrate)); vykresliTrate(); }
-        function nacitatVsetkyTrateZPamate() { const d = localStorage.getItem('mpg_trate'); if (d) { vsetkyTrate = JSON.parse(d); vykresliTrate(); } }
-        function vykresliTrate() { const ul = document.getElementById('ulozene-trate-list'); ul.innerHTML = ""; Object.keys(vsetkyTrate).forEach(m => { const li = document.createElement('li'); li.className = 'track-item'; li.innerText = m; li.onclick = () => { mojeOtocneBody = vsetkyTrate[m]; vykresliVsetko(); }; ul.appendChild(li); }); }
-
+        function vykresliZoznamBodov() {
+            const div = document.getElementById('zoznam-bodov'); if (mojeOtocneBody.length === 0) { div.innerHTML = '<em>Žiadne body. Klikni do mapy!</em>'; return; }
+            let html = '<ul>'; mojeOtocneBody.forEach((b, i) => { html += "<li><strong>" + (i+1) + ". " + b.nazov + "</strong> <button class=\"btn-del-single\" onclick=\"zmazatJedinyBod(" + i + ")\">Zmazať</button></li>"; });
+            html += '</ul>'; div.innerHTML = html;
+        }
+        window.zmazatJedinyBod = function(index) {
+            if (mapMarkers[index] && map) map.removeLayer(mapMarkers[index]); if (mapVisuals[index] && map) map.removeLayer(mapVisuals[index]);
+            mojeOtocneBody.splice(index, 1); mapMarkers.splice(index, 1); mapVisuals.splice(index, 1); prekresliVsetkyBody(); vykresliZoznamBodov();
+        }
+        function prekresliVsetkyBody() { if(!map) return; mapMarkers.forEach(m => map.removeLayer(m)); mapVisuals.forEach(v => map.removeLayer(v)); mapMarkers = []; mapVisuals = []; mojeOtocneBody.forEach((b, i) => { vykresliBodNaMapu(b, i); }); }
+        function ulozitTratDoPamate() { const menoTrate = document.getElementById('task-name-input').value.trim(); if (!menoTrate || mojeOtocneBody.length === 0) return; vsetkyTrate[menoTrate] = mojeOtocneBody; localStorage.setItem('mpg_vsetky_trate_v3', JSON.stringify(vsetkyTrate)); vykresliZoznamUlozenychTrati(); }
+        function nacitatVsetkyTrateZPamate() { const data = localStorage.getItem('mpg_vsetky_trate_v3'); if (data) { vsetkyTrate = JSON.parse(data); vykresliZoznamUlozenychTrati(); const kluce = Object.keys(vsetkyTrate); if (kluce.length > 0) aktivujTrat(kluce[0]); } }
+        function vykresliZoznamUlozenychTrati() { const ul = document.getElementById('ulozene-trate-list'); if(!ul) return; ul.innerHTML = ""; const aktualneMeno = document.getElementById('task-name-input').value; Object.keys(vsetkyTrate).forEach(meno => { const li = document.createElement('li'); li.className = "track-item" + (meno === aktualneMeno ? " active" : ""); li.innerText = meno; li.onclick = function() { aktivujTrat(meno); }; ul.appendChild(li); }); }
+        function aktivujTrat(meno) { document.getElementById('task-name-input').value = meno; mojeOtocneBody = JSON.parse(JSON.stringify(vsetkyTrate[meno])); prekresliVsetkyBody(); vykresliZoznamBodov(); vykresliZoznamUlozenychTrati(); }
+        function vynulovatTrat() { mojeOtocneBody = []; prekresliVsetkyBody(); vykresliZoznamBodov(); document.getElementById('vysledky-box').style.display = "none"; }
+        function tlacitMapuVysokeRozlisenie() { window.print(); }
+        function exportovatDoKML() { if (mojeOtocneBody.length === 0) return; let kml = '<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>'; mojeOtocneBody.forEach(b => { kml += '<Placemark><name>' + b.nazov + '</name><Point><coordinates>' + b.lon + ',' + b.lat + ',0</coordinates></Point></Placemark>'; }); kml += '</Document></kml>'; const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "task.kml"; a.click(); }
+        function getDistance(lat1, lon1, lat2, lon2) { const R = 6371000; const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180; const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2); return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }
+        function ciarySaPretinaju(A, B, C, D) { function ccw(p1, p2, p3) { return (p3[0] - p1[0]) * (p2[1] - p1[1]) > (p2[0] - p1[0]) * (p3[1] - p1[1]); } return (ccw(A, C, D) !== ccw(B, C, D)) && (ccw(A, B, C) !== ccw(A, B, D)); }
+        function parseCoordinateFlexible(str, isLon) { if (!str) return 0; str = str.trim().toUpperCase(); let direction = 'N'; if (str.endsWith('N') || str.endsWith('S') || str.endsWith('E') || str.endsWith('W')) { direction = str.slice(-1); str = str.slice(0, -1); } let degrees = isLon ? parseFloat(str.substring(0, 3)) : parseFloat(str.substring(0, 2)); let minutesRaw = isLon ? str.substring(3) : str.substring(2); let minutes = minutesRaw.includes('.') ? parseFloat(minutesRaw) : parseFloat(minutesRaw.substring(0, 2) + "." + minutesRaw.substring(2)); let decimal = degrees + (minutes / 60); if (direction === 'S' || direction === 'W') decimal = -decimal; return decimal; }
+        
         document.getElementById('igc-input').addEventListener('change', function(e) {
-            const file = e.target.files[0]; const reader = new FileReader();
+            const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
             reader.onload = function(evt) {
-                const text = evt.target.result; let menoPilota = "Neznámy pilot";
-                text.split('\n').forEach(r => {
-                    if (r.startsWith('H') && r.toUpperCase().includes('PILOT')) {
-                        let casti = r.split(':'); if (casti.length > 1) menoPilota = casti.slice(1).join(':').trim();
+                const text = evt.target.result; const riadky = text.split(/\r?\n/); let trackPoints = []; let menoPilota = "Neznámy pilot";
+                riadky.forEach(riadok => {
+                    // Spoľahlivé čítanie akéhokoľvek mena za dvojbodkou
+                    if (riadok.startsWith('H') && riadok.toUpperCase().includes('PILOT')) {
+                        const indexDvojbodky = riadok.indexOf(':');
+                        if (indexDvojbodky !== -1) {
+                            const mozneMeno = riadok.substring(indexDvojbodky + 1).trim();
+                            if (mozneMeno.length > 0) menoPilota = mozneMeno;
+                        }
+                    }
+
+                    if (riadok.startsWith('B') && riadok.length >= 24) {
+                        const casStr = riadok.substring(1, 7); const latStr = riadok.substring(7, 15); const lonStr = riadok.substring(15, 24);
+                        const hms = casStr.substring(0,2) + ":" + casStr.substring(2,4) + ":" + casStr.substring(4,6); const lat = parseCoordinateFlexible(latStr, false); const lon = parseCoordinateFlexible(lonStr, true);
+                        trackPoints.push({ lat: lat, lon: lon, cas: hms, sekundy: parseInt(casStr.substring(0,2))*3600 + parseInt(casStr.substring(2,4))*60 + parseInt(casStr.substring(4,6)) });
                     }
                 });
-                document.getElementById('vysledky-box').style.display = "block";
-                document.getElementById('pilot-box').innerHTML = "👤 Pilot: " + menoPilota;
+                if (trackPoints.length > 0 && map) { if (flightPolyline) map.removeLayer(flightPolyline); flightPolyline = L.polyline(trackPoints.map(p => [p.lat, p.lon]), { color: '#00bcd4' }).addTo(map); map.fitBounds(flightPolyline.getBounds()); vyhodnotLet(trackPoints, menoPilota); }
             }; reader.readAsText(file);
         });
+        function formatujCas(sekundy) { const h = Math.floor(sekundy / 3600); const m = Math.floor((sekundy % 3600) / 60); const s = sekundy % 60; return (h > 0 ? h + "h " : "") + m + "m " + s + "s"; }
+        function vyhodnotLet(bodyLetu, menoPilota) {
+            const vysledokBox = document.getElementById('vysledky-box'); const vysledokText = document.getElementById('vysledok-text'); const pilotBox = document.getElementById('pilot-box'); const celkovyCasBox = document.getElementById('celkovy-cas-box');
+            vysledokBox.style.display = "block"; pilotBox.innerHTML = "👤 Pilot: " + menoPilota; pilotBox.style.display = "block";
+            let htmlLog = "<ul>"; let preletenePoradie = 0; let casyPreletov = [];
+            mojeOtocneBody.forEach(bod => {
+                let preleteny = false; let casPreletu = ""; let sekundyPreletu = 0;
+                if (bod.typ === "gate") {
+                    for (let i = 1; i < bodyLetu.length; i++) {
+                        if (ciarySaPretinaju([bodyLetu[i-1].lat, bodyLetu[i-1].lon], [bodyLetu[i].lat, bodyLetu[i].lon], bod.p1, bod.p2)) { preleteny = true; casPreletu = bodyLetu[i].cas; sekundyPreletu = bodyLetu[i].sekundy; break; }
+                    }
+                } else {
+                    for (let i = 0; i < bodyLetu.length; i++) {
+                        if (getDistance(bodyLetu[i].lat, bodyLetu[i].lon, bod.lat, bod.lon) <= bod.rozmer) { preleteny = true; casPreletu = bodyLetu[i].cas; sekundyPreletu = bodyLetu[i].sekundy; break; }
+                    }
+                }
+                if (preleteny) { preletenePoradie++; htmlLog += "<li>🟢 <strong>" + bod.nazov + "</strong> (" + casPreletu + ")</li>"; casyPreletov.push(sekundyPreletu); }
+                else { htmlLog += "<li>🔴 <strong>" + bod.nazov + "</strong> (Nepreletené)</li>"; }
+            });
+            if (casyPreletov.length >= 2) { const minCas = Math.min(...casyPreletov); const maxCas = Math.max(...casyPreletov); const rozdiel = maxCas - minCas; celkovyCasBox.innerHTML = "⏱️ Celkový čas trasy: " + formatujCas(rozdiel); celkovyCasBox.style.display = "block"; }
+            else { celkovyCasBox.innerHTML = "⏱️ Celkový čas: Nedá sa spočítať (musia byť preletené aspoň 2 body)"; celkovyCasBox.style.display = "block"; }
+            vysledokText.innerHTML = "<h4>Splnené: " + preletenePoradie + " z " + mojeOtocneBody.length + "</h4>" + htmlLog;
+        }
 
-        inicializujMapu();
+        document.addEventListener("DOMContentLoaded", inicializujMapu);
+        if (document.readyState === "interactive" || document.readyState === "complete") { inicializujMapu(); }
     </script>
 </body>
 </html>
