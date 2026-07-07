@@ -35,14 +35,12 @@
         .point-breakdown { font-size: 11px; color: #aaa; display: block; margin-top: 2px; }
         #status-kreslenia { background: #ff9800; color: #000; padding: 8px; border-radius: 5px; font-weight: bold; margin-bottom: 10px; display: none; text-align: center; }
         
-        /* ŠPECIÁLNA PRÍPRAVA NA TLAČ MAPY (Opravuje čierny štvorec) */
+        /* ÚPRAVY PRE TLAČ */
         body.prep-print-map .card:not(#map-container) { display: none !important; }
         body.prep-print-map #status-kreslenia { display: none !important; }
         body.prep-print-map #map-container { padding: 0; background: transparent; border: none; box-shadow: none; margin: 0; }
-        body.prep-print-map #map { height: 95vh !important; border: 2px solid #000; }
         body.prep-print-map h3 { color: #000; }
 
-        /* TLAČ VÝSLEDKOV */
         body.prep-print-board .card:not(#leaderboard-box) { display: none !important; }
         body.prep-print-board #status-kreslenia { display: none !important; }
         body.prep-print-board #leaderboard-box { background: transparent; box-shadow: none; border: none; padding: 0; }
@@ -54,6 +52,7 @@
             th, td { border: 1px solid #ccc; padding: 4px; }
             th { background: #eee !important; -webkit-print-color-adjust: exact; }
             .dekl-input, .penale-input { border: none; background: transparent; color: black; font-weight: bold; }
+            #map { max-width: 100% !important; page-break-inside: avoid; }
         }
     </style>
 </head>
@@ -108,15 +107,27 @@
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
         let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
         
-        // OPRAVA TLAČE - zamedzenie čiernemu štvorcu
+        // OPRAVA TLAČE - Tvrdé nastavenie veľkosti pred tlačou
         window.tlacitMapu = function() {
             document.body.classList.add("prep-print-map");
-            map.invalidateSize(); // Donúti mapu zistiť novú veľkosť
+            
+            let mapEl = document.getElementById('map');
+            // Natvrdo nastavíme pixely, aby prehliadač vedel, aká veľká je plocha pre dlaždice
+            mapEl.style.width = '1000px'; 
+            mapEl.style.height = '700px';
+            
+            map.invalidateSize(); 
+            
+            // Počkáme celú 1.5 sekundu na natiahnutie mapových podkladov!
             setTimeout(() => {
                 window.print();
+                
+                // Návrat do normálu po vytlačení
                 document.body.classList.remove("prep-print-map");
-                setTimeout(() => map.invalidateSize(), 200); // Vráti mapu späť
-            }, 600); // Dáme mape pol sekundy na stiahnutie HD dlaždíc
+                mapEl.style.width = '100%';
+                mapEl.style.height = '380px';
+                setTimeout(() => map.invalidateSize(), 200);
+            }, 1500); 
         }
 
         window.tlacitVysledky = function() {
@@ -130,7 +141,7 @@
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
             nacitatVsetkyTrateZPamate();
             map.on('click', mapClickAction);
-            setTimeout(() => { if(map) map.invalidateSize(); }, 500); // Poistka proti čiernemu štvorcu pri štarte
+            setTimeout(() => { if(map) map.invalidateSize(); }, 500);
         }
         
         function mapClickAction(e) {
@@ -232,4 +243,93 @@
         });
 
         window.vyhodnotStatus = function() {
-            const pocetCakanych = parseInt(document.getElementById('pocet-
+            const pocetCakanych = parseInt(document.getElementById('pocet-pretekarov').value) || 0;
+            const pocetNahratych = vysledkyPiloti.length;
+            const statusEl = document.getElementById('upload-status');
+            
+            if (pocetCakanych > 0) {
+                if (pocetNahratych === pocetCakanych) { statusEl.innerHTML = `✅ Výborne! Nahraté sú všetky lety (${pocetNahratych} z ${pocetCakanych})`; statusEl.style.color = '#4caf50'; } 
+                else if (pocetNahratych < pocetCakanych) { statusEl.innerHTML = `⚠️ Pozor, chýbajú lety! Nahratých je len ${pocetNahratych} z ${pocetCakanych}`; statusEl.style.color = '#ff9800'; }
+                else { statusEl.innerHTML = `❓ Nahratých je viac letov ako bolo zadané (${pocetNahratych} z ${pocetCakanych})`; statusEl.style.color = '#e91e63'; }
+            } else { statusEl.innerHTML = `✅ Nahraté lety: ${pocetNahratych}`; statusEl.style.color = '#4caf50'; }
+        }
+
+        function vypocitajBodyZCasu(realnyCas, deklarovanyCas) {
+            if (!deklarovanyCas || deklarovanyCas <= 0) return 0;
+            let diff = Math.abs(realnyCas - deklarovanyCas);
+            let strateneBody = Math.round(diff / 60); 
+            let body = 15 - strateneBody;
+            return body > 0 ? body : 0;
+        }
+
+        window.zmenDeklarovany = function(index, text) {
+            vysledkyPiloti[index].deklarovanyText = text;
+            let parts = text.split(':');
+            let sec = (parts.length === 2) ? (parseInt(parts[0]) * 60 + parseInt(parts[1])) : parseInt(text) * 60;
+            vysledkyPiloti[index].deklarovanySec = isNaN(sec) ? 0 : sec;
+            vykresliLeaderboard();
+        }
+
+        window.zmenPenale = function(index, val) { vysledkyPiloti[index].penale = parseInt(val) || 0; vykresliLeaderboard(); }
+
+        function vykresliLeaderboard() {
+            if(vysledkyPiloti.length === 0) return;
+            document.getElementById('leaderboard-box').style.display = "block";
+            
+            vysledkyPiloti.forEach(p => {
+                let realnyCas = p.maCas ? (p.casBase + p.penale) : 0;
+                p.bodyCas = p.maCas ? vypocitajBodyZCasu(realnyCas, p.deklarovanySec) : 0;
+                p.bodyOtocaky = p.splnene * 2; 
+                p.bodySpolu = p.bodyOtocaky + p.bodyCas;
+            });
+
+            vysledkyPiloti.sort((a, b) => {
+                if (b.bodySpolu !== a.bodySpolu) return b.bodySpolu - a.bodySpolu;
+                const casA = a.maCas ? (a.casBase + a.penale) : Infinity;
+                const casB = b.maCas ? (b.casBase + b.penale) : Infinity;
+                return casA - casB;
+            });
+
+            let html = `<table><tr>
+                <th>#</th>
+                <th>Pilot</th>
+                <th>Preletené<br>otočáky</th>
+                <th>Čas letu</th>
+                <th>Deklar. čas<br><small>(mm:ss)</small></th>
+                <th>Penále (s)</th>
+                <th>Finálny čas</th>
+                <th style="color:#4caf50;">CELKOM BODY</th>
+            </tr>`;
+            
+            vysledkyPiloti.forEach((p, i) => {
+                let celkovy = p.maCas ? formatCas(p.casBase + p.penale) : "Nedokončil";
+                let casL = p.maCas ? formatCas(p.casBase) : "-";
+                
+                html += `<tr>
+                    <td>${i+1}</td>
+                    <td><b>${p.meno}</b></td>
+                    <td>${p.splnene} / ${mojeOtocneBody.length} <br><span class="point-breakdown">(+${p.bodyOtocaky}b)</span></td>
+                    <td>${casL}</td>
+                    <td><input type="text" class="dekl-input" placeholder="mm:ss" value="${p.deklarovanyText}" onchange="zmenDeklarovany(${i}, this.value)"></td>
+                    <td><input type="number" class="penale-input" value="${p.penale}" onchange="zmenPenale(${i}, this.value)"></td>
+                    <td style="font-weight:bold; color:#ff9800;">${celkovy}</td>
+                    <td style="font-size:16px; font-weight:bold; color:#4caf50;">${p.bodySpolu} <br><span class="point-breakdown" style="font-weight:normal; font-size:11px;">(Otočáky: ${p.bodyOtocaky} | Čas: ${p.bodyCas})</span></td>
+                </tr>`;
+            });
+            html += `</table>`;
+            document.getElementById('leaderboard-table-container').innerHTML = html;
+        }
+
+        window.exportovatDoCSV = function() {
+            let csv = "\uFEFFPoradie;Pilot;Pocet otocakov;Body za otocaky;Cisty cas (s);Deklarovany (s);Penalizacia (s);Body za cas;CELKOVE BODY\n";
+            vysledkyPiloti.forEach((p, i) => { csv += `${i+1};${p.meno};${p.splnene};${p.bodyOtocaky};${p.casBase};${p.deklarovanySec};${p.penale};${p.bodyCas};${p.bodySpolu}\n`; });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = "Vysledky.csv"; a.click();
+        }
+
+        inicializujMapu();
+
+        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
+    </script>
+</body>
+</html>
