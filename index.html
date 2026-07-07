@@ -35,38 +35,28 @@
         .point-breakdown { font-size: 11px; color: #aaa; display: block; margin-top: 2px; }
         #status-kreslenia { background: #ff9800; color: #000; padding: 8px; border-radius: 5px; font-weight: bold; margin-bottom: 10px; display: none; text-align: center; }
         
-        /* ------------------------------------------------------------------- */
-        /* CSS PRE TLAČ MAPY NA CELÚ A4 BEZ OKRAJOV A BLBOSTÍ ODKOLO */
-        /* ------------------------------------------------------------------- */
-        @media print {
-            /* Toto zruší biele okraje a URL adresy/dátumy prehliadača */
-            @page { size: landscape; margin: 0; }
-            
-            body { background: #fff; color: #000; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
-            
-            /* Ak sa tlačí mapa */
-            body.prep-print-map * { visibility: hidden; } /* Schová VŠETKO na webe */
-            body.prep-print-map #map-container, body.prep-print-map #map-container * { visibility: visible; } /* Okrem mapy */
-            
-            body.prep-print-map #map-container {
-                position: absolute; left: 0; top: 0; width: 100vw; height: 100vh;
-                margin: 0; padding: 0; border: none; box-shadow: none; background: transparent;
-            }
-            body.prep-print-map #map {
-                width: 100vw !important; height: 100vh !important;
-                border: none !important; border-radius: 0 !important;
-            }
-            body.prep-print-map h3 { display: none !important; } /* Schová nápis "Mapa:" */
-            .leaflet-control-zoom, .leaflet-control-attribution { display: none !important; } /* Schová +/- a texty Leafletu */
+        /* CSS PRE TLAČ MAPY BEZ BIELEHO ŠTVORCA */
+        body.prep-print-map .card:not(#map-container) { display: none !important; }
+        body.prep-print-map #status-kreslenia { display: none !important; }
+        body.prep-print-map h3 { display: none !important; }
+        body.prep-print-map #map-container { padding: 0; margin: 0; border: none; box-shadow: none; background: transparent; }
+        body.prep-print-map #map { border: none !important; border-radius: 0 !important; }
+        body.prep-print-map #cancel-print-btn { display: block !important; }
 
-            /* Ak sa tlačia výsledky */
-            body.prep-print-board * { visibility: hidden; }
-            body.prep-print-board #leaderboard-box, body.prep-print-board #leaderboard-box * { visibility: visible; }
+        /* CSS PRE TLAČ VÝSLEDKOV */
+        body.prep-print-board .card:not(#leaderboard-box) { display: none !important; }
+        body.prep-print-board #status-kreslenia { display: none !important; }
+        body.prep-print-board #leaderboard-box { background: transparent; box-shadow: none; border: none; padding: 0; }
+        body.prep-print-board #leaderboard-box h3 { color: black; font-size: 20px; }
+
+        @media print {
+            @page { size: landscape; margin: 0; }
+            body { background: #fff; color: #000; padding: 0; margin: 0; -webkit-print-color-adjust: exact; }
             
-            body.prep-print-board #leaderboard-box {
-                position: absolute; left: 0; top: 0; width: 100%; border: none; padding: 15px;
-            }
-            table { font-size: 12px; color: black; } 
+            body.prep-print-map #cancel-print-btn { display: none !important; } /* Tlačidlo sa na papier nedostane */
+            .leaflet-control-zoom, .leaflet-control-attribution { display: none !important; }
+            
+            table { font-size: 12px; color: black; width: 100%; } 
             th, td { border: 1px solid #ccc; padding: 4px; }
             th { background: #eee !important; }
             .dekl-input, .penale-input { border: none; background: transparent; color: black; font-weight: bold; }
@@ -97,6 +87,7 @@
 
     <div class="card" id="map-container">
         <h3>🗺️ Mapa:</h3>
+        <button id="cancel-print-btn" onclick="obnovitPoTlaci()" style="display:none; width:100%; padding:15px; background:#f44336; color:white; font-weight:bold; border:none; border-radius:5px; margin-bottom:10px; font-size:16px; cursor:pointer;">❌ ZRUŠIŤ NÁHĽAD TLAČE A VRÁTIŤ SA SPÄŤ</button>
         <div id="map"></div>
     </div>
 
@@ -124,9 +115,7 @@
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
         let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
         
-        // ==========================================
-        // OPRAVA TLAČE MAPY: Pružné roztiahnutie na A4
-        // ==========================================
+        // OPRAVA TLAČE - Bezpečné prispôsobenie na A4
         window.tlacitMapu = function() {
             if (mojeOtocneBody.length === 0) {
                 alert("Nemáš na mape žiadne body!");
@@ -135,82 +124,17 @@
 
             let mapEl = document.getElementById('map');
             
-            // Nastavíme 100vw a 100vh miesto fixných pixelov
-            mapEl.style.width = '100vw'; 
-            mapEl.style.height = '100vh';
+            // Fixné rozmery pre bezpečné načítanie v náhľade tlače (veľkosť A4 papiera)
+            mapEl.style.width = '1122px'; 
+            mapEl.style.height = '793px';
+            
+            document.body.classList.add("prep-print-map");
             map.invalidateSize(); 
 
-            // Automatické priblíženie na všetky zaznačené body
             let bodyPreZoom = [];
             mojeOtocneBody.forEach(b => {
                 if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]]); bodyPreZoom.push([b.p2[0], b.p2[1]]); }
                 else { bodyPreZoom.push([b.lat, b.lon]); }
             });
             if (bodyPreZoom.length > 0) {
-                map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [40, 40] });
-            }
-
-            // Aplikovanie triedy na schovanie zvyšku stránky
-            document.body.classList.add("prep-print-map");
-            
-            setTimeout(() => {
-                window.print();
-                
-                // Návrat späť po vytlačení
-                document.body.classList.remove("prep-print-map");
-                mapEl.style.width = '100%';
-                mapEl.style.height = '450px';
-                setTimeout(() => {
-                    map.invalidateSize();
-                    if (bodyPreZoom.length > 0) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [20, 20] });
-                }, 200);
-            }, 1000); // 1 sekunda čas na vykreslenie
-        }
-
-        window.tlacitVysledky = function() {
-            document.body.classList.add("prep-print-board");
-            window.print();
-            document.body.classList.remove("prep-print-board");
-        }
-
-        function inicializujMapu() {
-            map = L.map('map').setView([48.6, 19.5], 8);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-            
-            // MIERKA NA MAPU - Bude viditeľná aj na papieri
-            L.control.scale({ imperial: false, position: 'bottomleft', maxWidth: 250 }).addTo(map);
-
-            nacitatVsetkyTrateZPamate();
-            map.on('click', mapClickAction);
-            setTimeout(() => { if(map) map.invalidateSize(); }, 500);
-        }
-        
-        function mapClickAction(e) {
-            const lat = e.latlng.lat; const lon = e.latlng.lng;
-            if (rezimKresleniaBrany) {
-                if (docasnyMarker) map.removeLayer(docasnyMarker);
-                document.getElementById('status-kreslenia').style.display = "none"; rezimKresleniaBrany = false;
-                mojeOtocneBody.push({ nazov: docasnyNazovBrany, typ: "gate", lat: (prvyBodBrany.lat + lat) / 2, lon: (prvyBodBrany.lon + lon) / 2, p1: [prvyBodBrany.lat, prvyBodBrany.lon], p2: [lat, lon] });
-                prekresliVsetkyBody(); return;
-            }
-            const cisloBodov = mojeOtocneBody.length + 1; let pNazov = cisloBodov === 1 ? "START" : "Otocak " + cisloBodov;
-            const nazov = prompt("Názov bodu:", pNazov); if (!nazov) return; const nazovUpper = nazov.toUpperCase();
-            if (nazovUpper === "START" || nazovUpper === "CIEL") {
-                rezimKresleniaBrany = true; docasnyNazovBrany = nazovUpper; prvyBodBrany = { lat: lat, lon: lon };
-                docasnyMarker = L.circleMarker([lat, lon], { radius: 6, color: '#ff9800' }).addTo(map);
-                document.getElementById('status-kreslenia').style.display = "block";
-            } else {
-                const radius = parseInt(prompt("Polomer valca (m):", "100")) || 100;
-                mojeOtocneBody.push({ nazov: nazovUpper, lat: lat, lon: lon, typ: "cylinder", rozmer: radius });
-                prekresliVsetkyBody();
-            }
-        }
-
-        function prekresliVsetkyBody() {
-            mapMarkers.forEach(m => map.removeLayer(m)); mapVisuals.forEach(v => map.removeLayer(v));
-            mapMarkers = []; mapVisuals = [];
-            mojeOtocneBody.forEach((b, i) => {
-                const marker = L.marker([b.lat, b.lon]).addTo(map).bindPopup(`<b>${b.nazov}</b><br><span class="popup-del-link" onclick="zmazatBod(${i})">🗑️ Zmazať</span>`);
-                mapMarkers.push(marker);
-                if (b.typ === "gate") { mapVisuals.push(L.polyline([b.p1, b.p2], { color: '#ff9800', weight: 6 }).addTo(map)); }
-                else { mapVisuals.push(L.circle([b.lat, b.lon], { color: 'red', fillColor: '#f03', fillOpacity: 0.1
+                map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: 
