@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MPG Multi-Task Organizer v14</title>
+    <title>MPG Multi-Task Organizer PRO</title>
+    <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -11,17 +12,14 @@
         body { font-family: sans-serif; background: #1e1e1e; color: #fff; padding: 10px; margin: 0; }
         .card { background: #2d2d2d; padding: 12px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         h2, h3 { margin-top: 0; margin-bottom: 8px; }
-        input[type="file"] { display: none; }
-        .file-label { display: block; background: #e67e22; text-align: center; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; }
-        #debug-log { background: #4caf50; color: #fff; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: bold; font-size: 14px; text-align: center; }
-        .drawing-status { background: #ff9800; color: #000; padding: 8px; border-radius: 5px; font-weight: bold; margin-bottom: 10px; display: none; text-align: center; }
         .input-text { width: 100%; padding: 10px; box-sizing: border-box; border-radius: 5px; border: 1px solid #444; background: #1e1e1e; color: white; margin-bottom: 10px; font-size: 16px; }
         .btn-group { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
         .btn { flex: 1; border: none; padding: 10px; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; text-align: center; font-size: 14px; min-width: 120px; }
-        .btn-save { background: #4caf50; } .btn-reset { background: #555; } .btn-export-img { background: #e91e63; } .btn-export-csv { background: #00bcd4; } .btn-qr { background: #673ab7; }
+        .btn-save { background: #4caf50; } .btn-reset { background: #555; } .btn-qr { background: #673ab7; }
+        .btn-print { background: #e91e63; } .btn-kml { background: #ff9800; } .btn-csv { background: #00bcd4; }
         .track-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; padding: 0; list-style: none; }
         .track-item { background: #444; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px; border: 1px solid #555; }
-        .track-item.active { background: #00bcd4; border-color: #00acc1; }
+        .track-item.active { background: #00bcd4; }
         .btn-del-single { background: #f44336; color: white; border: none; padding: 2px 6px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 10px; }
         .popup-del-link { color: #f44336; font-weight: bold; cursor: pointer; display: block; margin-top: 5px; text-decoration: underline; }
         #map { width: 100%; height: 380px; border-radius: 8px; border: 2px solid #444; background: #222; }
@@ -30,36 +28,36 @@
         th { background: #333; }
         .penale-input, .dekl-input { padding: 4px; background: #1e1e1e; color: white; border: 1px solid #666; text-align: center; border-radius: 3px; }
         .penale-input { width: 45px; } .dekl-input { width: 65px; }
-        #qrcode-container { display: none; text-align: center; background: white; padding: 15px; border-radius: 8px; margin-top: 10px; }
-        #qrcode-container img { margin: 0 auto; }
         .kontrola-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #333; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
         .kontrola-input { width: 60px; padding: 5px; border-radius: 4px; border: 1px solid #555; background: #222; color: white; text-align: center; font-weight: bold; font-size: 16px; }
         .point-breakdown { font-size: 11px; color: #aaa; display: block; margin-top: 2px; }
+        #status-kreslenia { background: #ff9800; color: #000; padding: 8px; border-radius: 5px; font-weight: bold; margin-bottom: 10px; display: none; text-align: center; }
         @media print {
             body { background: #fff; color: #000; padding: 0; margin: 0; }
-            .card, #status-kreslenia, .btn-group, label, #debug-log, .file-label, .kontrola-box { display: none !important; }
+            .card, #status-kreslenia, .btn-group, label, .kontrola-box, #zoznam-bodov { display: none !important; }
             #leaderboard-box { display: block !important; border: none; box-shadow: none; }
+            #map { width: 100% !important; height: 100vh !important; }
             table { font-size: 12px; color: black; } th, td { border: 1px solid #ccc; }
             .dekl-input, .penale-input { border: none; background: transparent; color: black; font-weight: bold; }
         }
     </style>
 </head>
 <body>
-    <div id="debug-log">🏆 VERZIA 14 PRO (Matematické zaokrúhľovanie minút)</div>
-    
     <div class="card">
-        <h2>🧭 Tvorba a správa trate</h2>
+        <h2>🧭 MPG Multi-Task Organizer PRO</h2>
         <input type="text" id="task-name-input" class="input-text" value="Task 1">
         <div class="btn-group">
             <button class="btn btn-save" onclick="ulozitTratDoPamate()">Uložiť trať 💾</button>
+            <button class="btn btn-print" onclick="window.print()">Tlačiť mapu 🖼️</button>
+            <button class="btn btn-kml" onclick="exportovatDoKML()">Stiahnuť KML 🛰️</button>
+            <button class="btn btn-qr" onclick="zobrazitQR()">QR Kód 📱</button>
             <button class="btn btn-reset" onclick="vynulovatTrat()">Vyčistiť 🔄</button>
-            <button class="btn btn-qr" onclick="zobrazitQR()">QR Kód Trate 📱</button>
         </div>
-        <div id="qrcode-container"></div>
+        <div id="qrcode-container" style="display:none; text-align:center; padding:15px; background:white; border-radius:8px;"></div>
         <ul id="ulozene-trate-list" class="track-list"></ul>
     </div>
 
-    <div id="status-kreslenia" class="drawing-status">✏️ REŽIM BRÁNY: Klikni na mape, kde má brána KONČIŤ!</div>
+    <div id="status-kreslenia">✏️ REŽIM BRÁNY: Klikni na mape, kde má brána KONČIŤ!</div>
     
     <div class="card">
         <h3>📍 Bodový zoznam:</h3>
@@ -72,28 +70,28 @@
     </div>
 
     <div class="card">
-        <h3>📥 Nahrávanie a vyhodnotenie letov</h3>
+        <h3>📥 Nahrávanie letov</h3>
         <div class="kontrola-box">
             <label>Počet pretekárov:</label>
             <input type="number" id="pocet-pretekarov" class="kontrola-input" value="0" min="0" onchange="vyhodnotStatus()">
             <span id="upload-status" style="font-weight: bold; font-size: 14px; color: #aaa;">Zatiaľ nenahraté žiadne lety</span>
         </div>
-        <label for="igc-input" class="file-label">📂 VYBRAŤ A NAHRAŤ IGC SÚBORY</label>
-        <input type="file" id="igc-input" accept=".igc" multiple>
+        <label for="igc-input" style="display:block; background:#e67e22; padding:12px; border-radius:5px; text-align:center; cursor:pointer; font-weight:bold; color:white;">📂 VYBRAŤ A NAHRAŤ IGC SÚBORY</label>
+        <input type="file" id="igc-input" accept=".igc" multiple style="display:none;">
     </div>
 
     <div class="card" id="leaderboard-box" style="display:none; overflow-x: auto;">
         <h3>🏆 Výsledková listina</h3>
         <div class="btn-group" style="margin-bottom: 10px;">
-            <button class="btn btn-export-csv" onclick="exportovatDoCSV()">Stiahnuť CSV (Excel) 📊</button>
-            <button class="btn btn-export-img" onclick="window.print()">Tlačiť výsledky 🖨️</button>
+            <button class="btn btn-csv" onclick="exportovatDoCSV()">Stiahnuť CSV (Excel) 📊</button>
+            <button class="btn btn-print" onclick="window.print()">Tlačiť výsledky 🖨️</button>
         </div>
         <div id="leaderboard-table-container"></div>
     </div>
 
     <script>
-        let mojeOtocneBody = [], mapMarkers = [], mapVisuals = [], flightPolylines = [], vsetkyTrate = {};
-        let vysledkyPiloti = [], rezimKresleniaBrany = false, docasnyNazovBrany = "", prvyBodBrany = null, docasnyMarker = null, map = null;
+        let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
+        let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
         
         function inicializujMapu() {
             map = L.map('map').setView([48.6, 19.5], 8);
@@ -103,7 +101,7 @@
         }
         
         function mapClickAction(e) {
-            const lat = e.latlng.lat, lon = e.latlng.lng;
+            const lat = e.latlng.lat; const lon = e.latlng.lng;
             if (rezimKresleniaBrany) {
                 if (docasnyMarker) map.removeLayer(docasnyMarker);
                 document.getElementById('status-kreslenia').style.display = "none"; rezimKresleniaBrany = false;
@@ -142,7 +140,23 @@
         function nacitatVsetkyTrateZPamate() { const d = localStorage.getItem('mpg_trate_v14'); if (d) { vsetkyTrate = JSON.parse(d); vykresliZoznamUlozenychTrati(); } }
         function vykresliZoznamUlozenychTrati() { const ul = document.getElementById('ulozene-trate-list'); ul.innerHTML = ""; Object.keys(vsetkyTrate).forEach(m => { const li = document.createElement('li'); li.className = 'track-item'; li.innerText = m; li.onclick = () => { mojeOtocneBody = vsetkyTrate[m]; prekresliVsetkyBody(); }; ul.appendChild(li); }); }
         function vynulovatTrat() { mojeOtocneBody = []; prekresliVsetkyBody(); document.getElementById('qrcode-container').style.display="none"; }
-        function zobrazitQR() { const qrBox = document.getElementById('qrcode-container'); qrBox.innerHTML = "<h4 style='color:black; margin-top:0;'>Naskenuj pre body</h4>"; const minified = mojeOtocneBody.map(b => `${b.nazov}|${b.lat.toFixed(5)}|${b.lon.toFixed(5)}`).join(';'); new QRCode(qrBox, { text: minified, width: 200, height: 200 }); qrBox.style.display = "block"; }
+        
+        function zobrazitQR() { 
+            const qrBox = document.getElementById('qrcode-container'); 
+            qrBox.innerHTML = "<h4 style='color:black; margin-top:0;'>Naskenuj pre body</h4>"; 
+            const minified = mojeOtocneBody.map(b => `${b.nazov}|${b.lat.toFixed(5)}|${b.lon.toFixed(5)}`).join(';'); 
+            new QRCode(qrBox, { text: minified, width: 200, height: 200 }); 
+            qrBox.style.display = "block"; 
+        }
+
+        function exportovatDoKML() {
+            if (mojeOtocneBody.length === 0) return alert("Nemáš žiadne body na mape!");
+            let kml = '<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>';
+            mojeOtocneBody.forEach(b => { kml += `<Placemark><name>${b.nazov}</name><Point><coordinates>${b.lon},${b.lat},0</coordinates></Point></Placemark>`; });
+            kml += '</Document></kml>';
+            const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "MPG_Task.kml"; a.click();
+        }
 
         function parseCoord(str, isLon) { let d = parseFloat(str.substring(0, isLon ? 3 : 2)); let m = parseFloat(str.substring(isLon ? 3 : 2)) / 60000; return d + m; }
         function getDist(lat1, lon1, lat2, lon2) { const R=6371000; const dLat=(lat2-lat1)*Math.PI/180; const dLon=(lon2-lon1)*Math.PI/180; const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2); return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
@@ -154,15 +168,19 @@
         document.getElementById('igc-input').addEventListener('change', async function(e) {
             const files = Array.from(e.target.files); if (files.length === 0) return;
             vysledkyPiloti = []; flightPolylines.forEach(pl => map.removeLayer(pl)); flightPolylines = [];
+            
             const results = await Promise.all(files.map(f => citajSubor(f)));
+            
             results.forEach(res => {
                 let menoPilota = res.file.replace('.igc',''); let trackPoints = [];
                 res.text.split(/\r?\n/).forEach(r => {
                     if (r.startsWith('H') && r.toUpperCase().includes('PILOT')) { const idx = r.indexOf(':'); if(idx !== -1) { let mozne = r.substring(idx+1).trim(); if(mozne) menoPilota = mozne; } }
                     if (r.startsWith('B') && r.length >= 24) { const cStr = r.substring(1, 7); const lat = parseCoord(r.substring(7, 15), false); const lon = parseCoord(r.substring(15, 24), true); const sec = parseInt(cStr.substring(0,2))*3600 + parseInt(cStr.substring(2,4))*60 + parseInt(cStr.substring(4,6)); trackPoints.push({ lat: lat, lon: lon, sekundy: sec }); }
                 });
+
                 let pl = L.polyline(trackPoints.map(p => [p.lat, p.lon]), { color: '#' + Math.floor(Math.random()*16777215).toString(16), weight: 3, opacity: 0.7 }).addTo(map);
                 flightPolylines.push(pl);
+
                 let preletenePoradie = 0; let casyPreletov = [];
                 mojeOtocneBody.forEach(bod => {
                     let preleteny = false; let secPreletu = 0;
@@ -170,9 +188,11 @@
                     else { for (let i=0; i<trackPoints.length; i++) { if (getDist(trackPoints[i].lat, trackPoints[i].lon, bod.lat, bod.lon) <= bod.rozmer) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; } } }
                     if(preleteny) { preletenePoradie++; casyPreletov.push(secPreletu); }
                 });
+
                 let casBase = (casyPreletov.length >= 2) ? Math.max(...casyPreletov) - Math.min(...casyPreletov) : 0;
                 vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: (casyPreletov.length >= 2), deklarovanyText: "", deklarovanySec: 0 });
             });
+            
             vyhodnotStatus();
             if(flightPolylines.length > 0) map.fitBounds(flightPolylines[0].getBounds());
             vykresliLeaderboard();
@@ -182,13 +202,14 @@
             const pocetCakanych = parseInt(document.getElementById('pocet-pretekarov').value) || 0;
             const pocetNahratych = vysledkyPiloti.length;
             const statusEl = document.getElementById('upload-status');
+            
             if (pocetCakanych > 0) {
                 if (pocetNahratych === pocetCakanych) { statusEl.innerHTML = `✅ Výborne! Nahraté sú všetky lety (${pocetNahratych} z ${pocetCakanych})`; statusEl.style.color = '#4caf50'; } 
                 else if (pocetNahratych < pocetCakanych) { statusEl.innerHTML = `⚠️ Pozor, chýbajú lety! Nahratých je len ${pocetNahratych} z ${pocetCakanych}`; statusEl.style.color = '#ff9800'; }
+                else { statusEl.innerHTML = `❓ Nahratých je viac letov ako bolo zadané (${pocetNahratych} z ${pocetCakanych})`; statusEl.style.color = '#e91e63'; }
             } else { statusEl.innerHTML = `✅ Nahraté lety: ${pocetNahratych}`; statusEl.style.color = '#4caf50'; }
         }
 
-        // MATEMATICKÉ ZAOKRÚHLENIE: 0-29s = 0b, 30-59s = 1b
         function vypocitajBodyZCasu(realnyCas, deklarovanyCas) {
             if (!deklarovanyCas || deklarovanyCas <= 0) return 0;
             let diff = Math.abs(realnyCas - deklarovanyCas);
@@ -210,30 +231,60 @@
         function vykresliLeaderboard() {
             if(vysledkyPiloti.length === 0) return;
             document.getElementById('leaderboard-box').style.display = "block";
+            
             vysledkyPiloti.forEach(p => {
                 let realnyCas = p.maCas ? (p.casBase + p.penale) : 0;
                 p.bodyCas = p.maCas ? vypocitajBodyZCasu(realnyCas, p.deklarovanySec) : 0;
                 p.bodySpolu = p.splnene + p.bodyCas;
             });
-            vysledkyPiloti.sort((a, b) => b.bodySpolu - a.bodySpolu || (a.maCas ? a.casBase : Infinity) - (b.maCas ? b.casBase : Infinity));
-            let html = `<table><tr><th>#</th><th>Pilot</th><th>Otočáky</th><th>Čas letu</th><th>Deklar. čas</th><th>Penále</th><th>CELKOM</th></tr>`;
+
+            vysledkyPiloti.sort((a, b) => {
+                if (b.bodySpolu !== a.bodySpolu) return b.bodySpolu - a.bodySpolu;
+                const casA = a.maCas ? (a.casBase + a.penale) : Infinity;
+                const casB = b.maCas ? (b.casBase + b.penale) : Infinity;
+                return casA - casB;
+            });
+
+            let html = `<table><tr>
+                <th>#</th>
+                <th>Pilot</th>
+                <th>Preletené<br>otočáky</th>
+                <th>Čas letu</th>
+                <th>Deklar. čas<br><small>(mm:ss)</small></th>
+                <th>Penále (s)</th>
+                <th>Finálny čas</th>
+                <th style="color:#4caf50;">CELKOM BODY</th>
+            </tr>`;
+            
             vysledkyPiloti.forEach((p, i) => {
-                html += `<tr><td>${i+1}</td><td><b>${p.meno}</b></td><td>${p.splnene}</td><td>${p.maCas ? formatCas(p.casBase) : "-"}</td>
-                <td><input type="text" class="dekl-input" placeholder="mm:ss" value="${p.deklarovanyText}" onchange="zmenDeklarovany(${i}, this.value)"></td>
-                <td><input type="number" class="penale-input" value="${p.penale}" onchange="zmenPenale(${i}, this.value)"></td>
-                <td style="font-size:16px; font-weight:bold; color:#4caf50;">${p.bodySpolu}</td></tr>`;
+                let celkovy = p.maCas ? formatCas(p.casBase + p.penale) : "Nedokončil";
+                let casL = p.maCas ? formatCas(p.casBase) : "-";
+                
+                html += `<tr>
+                    <td>${i+1}</td>
+                    <td><b>${p.meno}</b></td>
+                    <td>${p.splnene} / ${mojeOtocneBody.length} <br><span class="point-breakdown">(+${p.splnene}b)</span></td>
+                    <td>${casL}</td>
+                    <td><input type="text" class="dekl-input" placeholder="mm:ss" value="${p.deklarovanyText}" onchange="zmenDeklarovany(${i}, this.value)"></td>
+                    <td><input type="number" class="penale-input" value="${p.penale}" onchange="zmenPenale(${i}, this.value)"></td>
+                    <td style="font-weight:bold; color:#ff9800;">${celkovy}</td>
+                    <td style="font-size:16px; font-weight:bold; color:#4caf50;">${p.bodySpolu} <br><span class="point-breakdown" style="font-weight:normal; font-size:11px;">(Otočáky: ${p.splnene} | Čas: ${p.bodyCas})</span></td>
+                </tr>`;
             });
             html += `</table>`;
             document.getElementById('leaderboard-table-container').innerHTML = html;
         }
 
-        function exportovatDoCSV() {
-            let csv = "\uFEFFPoradie;Pilot;Otocaky;Cisty cas;Deklarovany;Penalizacia;Body\n";
+        window.exportovatDoCSV = function() {
+            let csv = "\uFEFFPoradie;Pilot;Otocaky;Cisty cas (s);Deklarovany (s);Penalizacia (s);Body\n";
             vysledkyPiloti.forEach((p, i) => { csv += `${i+1};${p.meno};${p.splnene};${p.casBase};${p.deklarovanySec};${p.penale};${p.bodySpolu}\n`; });
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "Vysledky.csv"; a.click();
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = "Vysledky.csv"; a.click();
         }
 
         inicializujMapu();
+
+        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
     </script>
 </body>
 </html>
