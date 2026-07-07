@@ -23,7 +23,7 @@
         .btn-del-single { background: #f44336; color: white; border: none; padding: 2px 6px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 10px; }
         .popup-del-link { color: #f44336; font-weight: bold; cursor: pointer; display: block; margin-top: 5px; text-decoration: underline; }
         
-        #map { width: 100%; height: 380px; border-radius: 8px; border: 2px solid #444; background: #e5e3df; }
+        #map { width: 100%; height: 450px; border-radius: 8px; border: 2px solid #444; background: #e5e3df; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
         th, td { border: 1px solid #555; padding: 6px; text-align: center; }
@@ -38,10 +38,10 @@
         /* CSS PRE TLAČ MAPY NA CELÚ A4 */
         body.prep-print-map .card:not(#map-container) { display: none !important; }
         body.prep-print-map #status-kreslenia { display: none !important; }
-        body.prep-print-map h3 { display: none !important; } /* Skryje text "Mapa:" */
+        body.prep-print-map h3 { display: none !important; }
         body.prep-print-map #map-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; padding: 0; margin: 0; border: none; box-shadow: none; background: transparent; }
         body.prep-print-map #map { width: 100vw !important; height: 100vh !important; border: none; border-radius: 0; }
-        body.prep-print-map .leaflet-control-zoom { display: none !important; } /* Skryje + a - tlačidlá pri tlači */
+        body.prep-print-map .leaflet-control-zoom { display: none !important; }
 
         /* CSS PRE TLAČ VÝSLEDKOV */
         body.prep-print-board .card:not(#leaderboard-box) { display: none !important; }
@@ -50,7 +50,7 @@
         body.prep-print-board #leaderboard-box h3 { color: black; font-size: 20px; }
 
         @media print {
-            @page { size: landscape; margin: 0; } /* Zabezpečí otočenie na šírku a zruší biele okraje prehliadača */
+            @page { size: landscape; margin: 0; }
             body { background: #fff; color: #000; padding: 0; margin: 0; -webkit-print-color-adjust: exact; }
             table { font-size: 12px; color: black; } 
             th, td { border: 1px solid #ccc; padding: 4px; }
@@ -112,6 +112,11 @@
         
         // OPRAVA TLAČE MAPY - Extrémne rozlíšenie a natiahnutie na celú A4
         window.tlacitMapu = function() {
+            if (mojeOtocneBody.length === 0) {
+                alert("Nemáš na mape žiadne body!");
+                return;
+            }
+
             let mapEl = document.getElementById('map');
             
             // 1. Nastavíme obrovské fyzické rozmery, aby mapa natiahla HD dlaždice (zodpovedá A4 na šírku pri 300dpi)
@@ -138,12 +143,12 @@
                 // 4. Návrat do bežného zobrazenia po dotlačení
                 document.body.classList.remove("prep-print-map");
                 mapEl.style.width = '100%';
-                mapEl.style.height = '380px';
+                mapEl.style.height = '450px';
                 setTimeout(() => {
                     map.invalidateSize();
                     if (bodyPreZoom.length > 0) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [20, 20] });
                 }, 200);
-            }, 1500); // 1.5 sekundy čas na stiahnutie poľných ciest
+            }, 1500); // 1.5 sekundy čas na stiahnutie poľných ciest vo vysokom rozlíšení
         }
 
         window.tlacitVysledky = function() {
@@ -156,8 +161,8 @@
             map = L.map('map').setView([48.6, 19.5], 8);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
             
-            // PRIDANÁ MIERKA NA MAPU (len kilometre/metre)
-            L.control.scale({ imperial: false, maxWidth: 200 }).addTo(map);
+            // PRIDANÁ MIERKA NA MAPU (len kilometre/metre, zobrazí sa aj pri tlači)
+            L.control.scale({ imperial: false, position: 'bottomleft', maxWidth: 200 }).addTo(map);
 
             nacitatVsetkyTrateZPamate();
             map.on('click', mapClickAction);
@@ -274,6 +279,7 @@
             } else { statusEl.innerHTML = `✅ Nahraté lety: ${pocetNahratych}`; statusEl.style.color = '#4caf50'; }
         }
 
+        // 15 BODOV MAX ZA ČAS: Matematické zaokrúhľovanie minút: 0-29s = 0 bodov dole, 30-59s = 1 bod dole.
         function vypocitajBodyZCasu(realnyCas, deklarovanyCas) {
             if (!deklarovanyCas || deklarovanyCas <= 0) return 0;
             let diff = Math.abs(realnyCas - deklarovanyCas);
@@ -299,7 +305,7 @@
             vysledkyPiloti.forEach(p => {
                 let realnyCas = p.maCas ? (p.casBase + p.penale) : 0;
                 p.bodyCas = p.maCas ? vypocitajBodyZCasu(realnyCas, p.deklarovanySec) : 0;
-                p.bodyOtocaky = p.splnene * 2; 
+                p.bodyOtocaky = p.splnene * 2; // 2 body za každý preletený otočák
                 p.bodySpolu = p.bodyOtocaky + p.bodyCas;
             });
 
