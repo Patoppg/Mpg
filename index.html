@@ -22,7 +22,9 @@
         .track-item.active { background: #00bcd4; }
         .btn-del-single { background: #f44336; color: white; border: none; padding: 2px 6px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 10px; }
         .popup-del-link { color: #f44336; font-weight: bold; cursor: pointer; display: block; margin-top: 5px; text-decoration: underline; }
-        #map { width: 100%; height: 380px; border-radius: 8px; border: 2px solid #444; background: #222; }
+        
+        #map { width: 100%; height: 380px; border-radius: 8px; border: 2px solid #444; background: #e5e3df; }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
         th, td { border: 1px solid #555; padding: 6px; text-align: center; }
         th { background: #333; }
@@ -33,24 +35,25 @@
         .point-breakdown { font-size: 11px; color: #aaa; display: block; margin-top: 2px; }
         #status-kreslenia { background: #ff9800; color: #000; padding: 8px; border-radius: 5px; font-weight: bold; margin-bottom: 10px; display: none; text-align: center; }
         
-        /* CSS PRE TLAČ (OPRAVENÉ) */
+        /* ŠPECIÁLNA PRÍPRAVA NA TLAČ MAPY (Opravuje čierny štvorec) */
+        body.prep-print-map .card:not(#map-container) { display: none !important; }
+        body.prep-print-map #status-kreslenia { display: none !important; }
+        body.prep-print-map #map-container { padding: 0; background: transparent; border: none; box-shadow: none; margin: 0; }
+        body.prep-print-map #map { height: 95vh !important; border: 2px solid #000; }
+        body.prep-print-map h3 { color: #000; }
+
+        /* TLAČ VÝSLEDKOV */
+        body.prep-print-board .card:not(#leaderboard-box) { display: none !important; }
+        body.prep-print-board #status-kreslenia { display: none !important; }
+        body.prep-print-board #leaderboard-box { background: transparent; box-shadow: none; border: none; padding: 0; }
+        body.prep-print-board #leaderboard-box h3 { color: black; font-size: 20px; }
+
         @media print {
             body { background: #fff; color: #000; padding: 0; margin: 0; }
-            body > * { display: none !important; } /* Skryje všetko by default */
-            
-            /* TLAČ MAPY */
-            body.print-map-mode #map-container { display: block !important; background: transparent; box-shadow: none; border: none; padding: 0; }
-            body.print-map-mode #map-container h3 { color: black; }
-            body.print-map-mode #map { width: 100% !important; height: 95vh !important; border: 2px solid #000; }
-
-            /* TLAČ VÝSLEDKOV */
-            body.print-board-mode #leaderboard-box { display: block !important; background: transparent; box-shadow: none; border: none; padding: 0; }
-            body.print-board-mode #leaderboard-box h3 { color: black; font-size: 18px; margin-bottom: 10px; }
-            body.print-board-mode table { font-size: 12px; color: black; } 
-            body.print-board-mode th, body.print-board-mode td { border: 1px solid #000; padding: 4px; }
-            body.print-board-mode th { background: #eee !important; -webkit-print-color-adjust: exact; }
-            body.print-board-mode .dekl-input, body.print-board-mode .penale-input { border: none; background: transparent; color: black; font-weight: bold; }
-            body.print-board-mode .point-breakdown { color: #555; }
+            table { font-size: 12px; color: black; } 
+            th, td { border: 1px solid #ccc; padding: 4px; }
+            th { background: #eee !important; -webkit-print-color-adjust: exact; }
+            .dekl-input, .penale-input { border: none; background: transparent; color: black; font-weight: bold; }
         }
     </style>
 </head>
@@ -105,14 +108,21 @@
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
         let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
         
-        // OPRAVA TLAČE: Funkcie pre prepínanie režimu tlače
+        // OPRAVA TLAČE - zamedzenie čiernemu štvorcu
         window.tlacitMapu = function() {
-            document.body.className = "print-map-mode";
-            window.print();
+            document.body.classList.add("prep-print-map");
+            map.invalidateSize(); // Donúti mapu zistiť novú veľkosť
+            setTimeout(() => {
+                window.print();
+                document.body.classList.remove("prep-print-map");
+                setTimeout(() => map.invalidateSize(), 200); // Vráti mapu späť
+            }, 600); // Dáme mape pol sekundy na stiahnutie HD dlaždíc
         }
+
         window.tlacitVysledky = function() {
-            document.body.className = "print-board-mode";
+            document.body.classList.add("prep-print-board");
             window.print();
+            document.body.classList.remove("prep-print-board");
         }
 
         function inicializujMapu() {
@@ -120,6 +130,7 @@
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
             nacitatVsetkyTrateZPamate();
             map.on('click', mapClickAction);
+            setTimeout(() => { if(map) map.invalidateSize(); }, 500); // Poistka proti čiernemu štvorcu pri štarte
         }
         
         function mapClickAction(e) {
@@ -185,4 +196,40 @@
         function ciarySaPretinaju(A,B,C,D) { function ccw(p1,p2,p3){return(p3[0]-p1[0])*(p2[1]-p1[1])>(p2[0]-p1[0])*(p3[1]-p1[1]);} return(ccw(A,C,D)!==ccw(B,C,D))&&(ccw(A,B,C)!==ccw(A,B,D)); }
         function formatCas(s) { const h = Math.floor(s/3600); const m = Math.floor((s%3600)/60); const sec = s%60; return (h>0?h+"h ":"")+m+"m "+sec+"s"; }
 
-        const citajSubor = (file) => new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => resolve({ text: e.target.result
+        const citajSubor = (file) => new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => resolve({ text: e.target.result, file: file.name }); reader.readAsText(file); });
+
+        document.getElementById('igc-input').addEventListener('change', async function(e) {
+            const files = Array.from(e.target.files); if (files.length === 0) return;
+            vysledkyPiloti = []; flightPolylines.forEach(pl => map.removeLayer(pl)); flightPolylines = [];
+            
+            const results = await Promise.all(files.map(f => citajSubor(f)));
+            
+            results.forEach(res => {
+                let menoPilota = res.file.replace('.igc',''); let trackPoints = [];
+                res.text.split(/\r?\n/).forEach(r => {
+                    if (r.startsWith('H') && r.toUpperCase().includes('PILOT')) { const idx = r.indexOf(':'); if(idx !== -1) { let mozne = r.substring(idx+1).trim(); if(mozne) menoPilota = mozne; } }
+                    if (r.startsWith('B') && r.length >= 24) { const cStr = r.substring(1, 7); const lat = parseCoord(r.substring(7, 15), false); const lon = parseCoord(r.substring(15, 24), true); const sec = parseInt(cStr.substring(0,2))*3600 + parseInt(cStr.substring(2,4))*60 + parseInt(cStr.substring(4,6)); trackPoints.push({ lat: lat, lon: lon, sekundy: sec }); }
+                });
+
+                let pl = L.polyline(trackPoints.map(p => [p.lat, p.lon]), { color: '#' + Math.floor(Math.random()*16777215).toString(16), weight: 3, opacity: 0.7 }).addTo(map);
+                flightPolylines.push(pl);
+
+                let preletenePoradie = 0; let casyPreletov = [];
+                mojeOtocneBody.forEach(bod => {
+                    let preleteny = false; let secPreletu = 0;
+                    if (bod.typ === "gate") { for (let i=1; i<trackPoints.length; i++) { if (ciarySaPretinaju([trackPoints[i-1].lat, trackPoints[i-1].lon], [trackPoints[i].lat, trackPoints[i].lon], bod.p1, bod.p2)) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; } } } 
+                    else { for (let i=0; i<trackPoints.length; i++) { if (getDist(trackPoints[i].lat, trackPoints[i].lon, bod.lat, bod.lon) <= bod.rozmer) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; } } }
+                    if(preleteny) { preletenePoradie++; casyPreletov.push(secPreletu); }
+                });
+
+                let casBase = (casyPreletov.length >= 2) ? Math.max(...casyPreletov) - Math.min(...casyPreletov) : 0;
+                vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: (casyPreletov.length >= 2), deklarovanyText: "", deklarovanySec: 0 });
+            });
+            
+            vyhodnotStatus();
+            if(flightPolylines.length > 0) map.fitBounds(flightPolylines[0].getBounds());
+            vykresliLeaderboard();
+        });
+
+        window.vyhodnotStatus = function() {
+            const pocetCakanych = parseInt(document.getElementById('pocet-
