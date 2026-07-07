@@ -35,24 +35,27 @@
         .point-breakdown { font-size: 11px; color: #aaa; display: block; margin-top: 2px; }
         #status-kreslenia { background: #ff9800; color: #000; padding: 8px; border-radius: 5px; font-weight: bold; margin-bottom: 10px; display: none; text-align: center; }
         
-        /* ÚPRAVY PRE TLAČ */
+        /* CSS PRE TLAČ MAPY NA CELÚ A4 */
         body.prep-print-map .card:not(#map-container) { display: none !important; }
         body.prep-print-map #status-kreslenia { display: none !important; }
-        body.prep-print-map #map-container { padding: 0; background: transparent; border: none; box-shadow: none; margin: 0; }
-        body.prep-print-map h3 { color: #000; }
+        body.prep-print-map h3 { display: none !important; } /* Skryje text "Mapa:" */
+        body.prep-print-map #map-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; padding: 0; margin: 0; border: none; box-shadow: none; background: transparent; }
+        body.prep-print-map #map { width: 100vw !important; height: 100vh !important; border: none; border-radius: 0; }
+        body.prep-print-map .leaflet-control-zoom { display: none !important; } /* Skryje + a - tlačidlá pri tlači */
 
+        /* CSS PRE TLAČ VÝSLEDKOV */
         body.prep-print-board .card:not(#leaderboard-box) { display: none !important; }
         body.prep-print-board #status-kreslenia { display: none !important; }
         body.prep-print-board #leaderboard-box { background: transparent; box-shadow: none; border: none; padding: 0; }
         body.prep-print-board #leaderboard-box h3 { color: black; font-size: 20px; }
 
         @media print {
-            body { background: #fff; color: #000; padding: 0; margin: 0; }
+            @page { size: landscape; margin: 0; } /* Zabezpečí otočenie na šírku a zruší biele okraje prehliadača */
+            body { background: #fff; color: #000; padding: 0; margin: 0; -webkit-print-color-adjust: exact; }
             table { font-size: 12px; color: black; } 
             th, td { border: 1px solid #ccc; padding: 4px; }
-            th { background: #eee !important; -webkit-print-color-adjust: exact; }
+            th { background: #eee !important; }
             .dekl-input, .penale-input { border: none; background: transparent; color: black; font-weight: bold; }
-            #map { max-width: 100% !important; page-break-inside: avoid; }
         }
     </style>
 </head>
@@ -107,27 +110,40 @@
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
         let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
         
-        // OPRAVA TLAČE - Tvrdé nastavenie veľkosti pred tlačou
+        // OPRAVA TLAČE MAPY - Extrémne rozlíšenie a natiahnutie na celú A4
         window.tlacitMapu = function() {
+            let mapEl = document.getElementById('map');
+            
+            // 1. Nastavíme obrovské fyzické rozmery, aby mapa natiahla HD dlaždice (zodpovedá A4 na šírku pri 300dpi)
+            mapEl.style.width = '2000px'; 
+            mapEl.style.height = '1400px';
+            map.invalidateSize(); 
+
+            // 2. Ak sú na mape body, priblížime sa presne na ne, aby nevyzerali na A4 maličké
+            let bodyPreZoom = [];
+            mojeOtocneBody.forEach(b => {
+                if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]]); bodyPreZoom.push([b.p2[0], b.p2[1]]); }
+                else { bodyPreZoom.push([b.lat, b.lon]); }
+            });
+            if (bodyPreZoom.length > 0) {
+                map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [50, 50] });
+            }
+
+            // 3. Prepnutie CSS na full-screen tlač a počkanie na stiahnutie dlaždíc
             document.body.classList.add("prep-print-map");
             
-            let mapEl = document.getElementById('map');
-            // Natvrdo nastavíme pixely, aby prehliadač vedel, aká veľká je plocha pre dlaždice
-            mapEl.style.width = '1000px'; 
-            mapEl.style.height = '700px';
-            
-            map.invalidateSize(); 
-            
-            // Počkáme celú 1.5 sekundu na natiahnutie mapových podkladov!
             setTimeout(() => {
                 window.print();
                 
-                // Návrat do normálu po vytlačení
+                // 4. Návrat do bežného zobrazenia po dotlačení
                 document.body.classList.remove("prep-print-map");
                 mapEl.style.width = '100%';
                 mapEl.style.height = '380px';
-                setTimeout(() => map.invalidateSize(), 200);
-            }, 1500); 
+                setTimeout(() => {
+                    map.invalidateSize();
+                    if (bodyPreZoom.length > 0) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [20, 20] });
+                }, 200);
+            }, 1500); // 1.5 sekundy čas na stiahnutie poľných ciest
         }
 
         window.tlacitVysledky = function() {
@@ -139,6 +155,10 @@
         function inicializujMapu() {
             map = L.map('map').setView([48.6, 19.5], 8);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+            
+            // PRIDANÁ MIERKA NA MAPU (len kilometre/metre)
+            L.control.scale({ imperial: false, maxWidth: 200 }).addTo(map);
+
             nacitatVsetkyTrateZPamate();
             map.on('click', mapClickAction);
             setTimeout(() => { if(map) map.invalidateSize(); }, 500);
