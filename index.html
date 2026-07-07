@@ -9,8 +9,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <style>
         body { font-family: sans-serif; background: #1e1e1e; color: #fff; padding: 10px; margin: 0; }
@@ -26,4 +24,208 @@
         .track-item { background: #444; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px; border: 1px solid #555; }
         .track-item.active { background: #00bcd4; }
         .btn-del-single { background: #f44336; color: white; border: none; padding: 2px 6px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 10px; }
-        .popup-del-link { color: #f44336; font-
+        .popup-del-link { color: #f44336; font-weight: bold; cursor: pointer; display: block; margin-top: 5px; text-decoration: underline; }
+        
+        #map-container { position: relative; }
+        #map { width: 100%; height: 450px; border-radius: 8px; border: 2px solid #444; background: #e5e3df; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th, td { border: 1px solid #555; padding: 6px; text-align: center; }
+        th { background: #333; }
+        .penale-input, .dekl-input { padding: 4px; background: #1e1e1e; color: white; border: 1px solid #666; text-align: center; border-radius: 3px; }
+        .penale-input { width: 45px; } .dekl-input { width: 65px; }
+        .kontrola-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #333; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
+        .kontrola-input { width: 60px; padding: 5px; border-radius: 4px; border: 1px solid #555; background: #222; color: white; text-align: center; font-weight: bold; font-size: 16px; }
+        .point-breakdown { font-size: 11px; color: #aaa; display: block; margin-top: 2px; }
+        #status-kreslenia { background: #ff9800; color: #000; padding: 8px; border-radius: 5px; font-weight: bold; margin-bottom: 10px; display: none; text-align: center; }
+
+        /* ======================================================== */
+        /* CSS PRE 2-KROKOVÝ REŽIM TLAČE (NÁHĽAD PRED TLAČOU)       */
+        /* ======================================================== */
+        #print-ui { display: none; position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 999999; gap: 10px; width: 95%; max-width: 600px; }
+        #print-ui button { flex: 1; padding: 20px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: white; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .btn-confirm-print { background: #4caf50; }
+        .btn-cancel-print { background: #f44336; }
+
+        body.print-mode { background: #fff !important; }
+        body.print-mode .card:not(#map-container) { display: none !important; }
+        body.print-mode h2, body.print-mode h3, body.print-mode #status-kreslenia { display: none !important; }
+        body.print-mode #print-ui { display: flex !important; }
+        
+        body.print-mode #map-container { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; padding: 0 !important; margin: 0 !important; border: none !important; z-index: 99999 !important; background: transparent; }
+        body.print-mode #map { width: 100vw !important; height: 100vh !important; border: none !important; border-radius: 0 !important; }
+
+        /* ======================================================== */
+        /* CSS PRE SAMOTNÝ PAPIER (Čo ide reálne do tlačiarne)      */
+        /* ======================================================== */
+        @media print {
+            @page { size: landscape; margin: 0; }
+            body { background: #fff; color: #000; padding: 0; margin: 0; -webkit-print-color-adjust: exact; }
+            
+            /* Ak sa tlačí mapa, skry tlačidlá náhľadu a ovládanie mapy */
+            #print-ui { display: none !important; }
+            .leaflet-control-zoom, .leaflet-control-attribution { display: none !important; }
+            
+            /* Tlač výsledkovej tabuľky */
+            body:not(.print-mode) .card:not(#leaderboard-box) { display: none !important; }
+            body:not(.print-mode) #leaderboard-box { background: transparent; box-shadow: none; border: none; padding: 0; display: block !important; }
+            table { font-size: 12px; color: black; width: 100%; } 
+            th, td { border: 1px solid #ccc; padding: 4px; }
+            th { background: #eee !important; }
+            .dekl-input, .penale-input { border: none; background: transparent; color: black; font-weight: bold; }
+        }
+    </style>
+</head>
+<body>
+    <div id="print-ui">
+        <button class="btn-cancel-print" onclick="zrusitRezimTlace()">❌ NÁVRAT</button>
+        <button class="btn-confirm-print" onclick="window.print()">🖨️ SPUSTIŤ TLAČ</button>
+    </div>
+
+    <div class="card">
+        <h2>🧭 MPG Multi-Task Organizer FINAL</h2>
+        <input type="text" id="task-name-input" class="input-text" value="Task 1">
+        <div class="btn-group">
+            <button class="btn btn-save" onclick="ulozitTratDoPamate()">Uložiť trať 💾</button>
+            <button class="btn btn-print" onclick="otvoritRezimTlace()">Tlačiť mapu (HD) 🖼️</button>
+            <button class="btn btn-kml" onclick="exportovatDoKML()">Stiahnuť KML 🛰️</button>
+            <button class="btn btn-qr" onclick="zobrazitQR()">QR Kód 📱</button>
+            <button class="btn btn-reset" onclick="vynulovatTrat()">Vyčistiť 🔄</button>
+        </div>
+        <div id="qrcode-container" style="display:none; text-align:center; padding:15px; background:white; border-radius:8px;"></div>
+        <ul id="ulozene-trate-list" class="track-list"></ul>
+    </div>
+
+    <div id="status-kreslenia">✏️ REŽIM BRÁNY: Klikni na mape, kde má brána KONČIŤ!</div>
+    
+    <div class="card" id="zoznam-bodov-container">
+        <h3>📍 Bodový zoznam:</h3>
+        <div id="zoznam-bodov"><em style="color: #888;">Klikaj do mapy! ("Štart"/"Cieľ" = Brána)</em></div>
+    </div>
+
+    <div class="card" id="map-container">
+        <h3>🗺️ Mapa:</h3>
+        <div id="map"></div>
+    </div>
+
+    <div class="card" id="upload-container">
+        <h3>📥 Nahrávanie letov</h3>
+        <div class="kontrola-box">
+            <label>Počet pretekárov:</label>
+            <input type="number" id="pocet-pretekarov" class="kontrola-input" value="0" min="0" onchange="vyhodnotStatus()">
+            <span id="upload-status" style="font-weight: bold; font-size: 14px; color: #aaa;">Zatiaľ nenahraté žiadne lety</span>
+        </div>
+        <label for="igc-input" style="display:block; background:#e67e22; padding:12px; border-radius:5px; text-align:center; cursor:pointer; font-weight:bold; color:white;">📂 VYBRAŤ A NAHRAŤ IGC SÚBORY</label>
+        <input type="file" id="igc-input" accept=".igc" multiple style="display:none;">
+    </div>
+
+    <div class="card" id="leaderboard-box" style="display:none; overflow-x: auto;">
+        <h3>🏆 Výsledková listina</h3>
+        <div class="btn-group" style="margin-bottom: 10px;">
+            <button class="btn btn-csv" onclick="exportovatDoCSV()">Stiahnuť CSV (Excel) 📊</button>
+            <button class="btn btn-print" onclick="window.print()">Tlačiť výsledky 🖨️</button>
+        </div>
+        <div id="leaderboard-table-container"></div>
+    </div>
+
+    <script>
+        let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
+        let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
+        
+        // Ikonka bodu natvrdo, aby neboli biele krížiky
+        const bodIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: "<div style='background-color:#e91e63; width:16px; height:16px; border-radius:50%; border:3px solid white; box-shadow: 0px 0px 5px rgba(0,0,0,0.8);'></div>",
+            iconSize: [22, 22],
+            iconAnchor: [11, 11]
+        });
+
+        // ==========================================
+        // NOVÁ A GARANTOVANÁ FUNKCIA PRE TLAČ MAPY
+        // ==========================================
+        window.otvoritRezimTlace = function() {
+            if (mojeOtocneBody.length === 0) return alert("Nemáš na mape žiadne body!");
+            
+            // 1. Aktivujeme full-screen režim
+            document.body.classList.add("print-mode");
+            
+            // 2. Prinútime mapu zistiť svoju novú veľkosť
+            map.invalidateSize();
+
+            // 3. Priblížime presne na body
+            let bodyPreZoom = [];
+            mojeOtocneBody.forEach(b => {
+                if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]]); bodyPreZoom.push([b.p2[0], b.p2[1]]); }
+                else { bodyPreZoom.push([b.lat, b.lon]); }
+            });
+            if (bodyPreZoom.length > 0) {
+                map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [30, 30] });
+            }
+            
+            // 4. Hotovo. Tlačidlo "Spustiť tlač" je zobrazené na obrazovke a čaká na používateľa.
+        }
+
+        window.zrusitRezimTlace = function() {
+            // Vypne full-screen
+            document.body.classList.remove("print-mode");
+            
+            // Vráti mapu do normálu
+            setTimeout(() => {
+                map.invalidateSize();
+                let bodyPreZoom = [];
+                mojeOtocneBody.forEach(b => {
+                    if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]]); bodyPreZoom.push([b.p2[0], b.p2[1]]); }
+                    else { bodyPreZoom.push([b.lat, b.lon]); }
+                });
+                if (bodyPreZoom.length > 0) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [20, 20] });
+            }, 200);
+        }
+
+        function inicializujMapu() {
+            map = L.map('map').setView([48.6, 19.5], 8);
+            
+            // === TAJNÁ ZBRAŇ PRE HD POLNÉ CESTY ===
+            // detectRetina: true donúti mapu ťahať ostré detaily aj keď je mapa oddialená!
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+                maxZoom: 19,
+                detectRetina: true 
+            }).addTo(map);
+            
+            L.control.scale({ imperial: false, position: 'bottomleft', maxWidth: 200 }).addTo(map);
+
+            nacitatVsetkyTrateZPamate();
+            map.on('click', mapClickAction);
+            setTimeout(() => { if(map) map.invalidateSize(); }, 500);
+        }
+        
+        function mapClickAction(e) {
+            const lat = e.latlng.lat; const lon = e.latlng.lng;
+            if (rezimKresleniaBrany) {
+                if (docasnyMarker) map.removeLayer(docasnyMarker);
+                document.getElementById('status-kreslenia').style.display = "none"; rezimKresleniaBrany = false;
+                mojeOtocneBody.push({ nazov: docasnyNazovBrany, typ: "gate", lat: (prvyBodBrany.lat + lat) / 2, lon: (prvyBodBrany.lon + lon) / 2, p1: [prvyBodBrany.lat, prvyBodBrany.lon], p2: [lat, lon] });
+                prekresliVsetkyBody(); return;
+            }
+            const cisloBodov = mojeOtocneBody.length + 1; let pNazov = cisloBodov === 1 ? "START" : "Otocak " + cisloBodov;
+            const nazov = prompt("Názov bodu:", pNazov); if (!nazov) return; const nazovUpper = nazov.toUpperCase();
+            if (nazovUpper === "START" || nazovUpper === "CIEL") {
+                rezimKresleniaBrany = true; docasnyNazovBrany = nazovUpper; prvyBodBrany = { lat: lat, lon: lon };
+                docasnyMarker = L.marker([lat, lon], {icon: bodIcon}).addTo(map);
+                document.getElementById('status-kreslenia').style.display = "block";
+            } else {
+                const radius = parseInt(prompt("Polomer valca (m):", "100")) || 100;
+                mojeOtocneBody.push({ nazov: nazovUpper, lat: lat, lon: lon, typ: "cylinder", rozmer: radius });
+                prekresliVsetkyBody();
+            }
+        }
+
+        function prekresliVsetkyBody() {
+            mapMarkers.forEach(m => map.removeLayer(m)); mapVisuals.forEach(v => map.removeLayer(v));
+            mapMarkers = []; mapVisuals = [];
+            mojeOtocneBody.forEach((b, i) => {
+                const marker = L.marker([b.lat, b.lon], {icon: bodIcon}).addTo(map).bindPopup(`<b>${b.nazov}</b><br><span class="popup-del-link" onclick="zmazatBod(${i})">🗑️ Zmazať</span>`);
+                mapMarkers.push(marker);
+                if (b.typ === "gate") { mapVisuals.push(L.polyline([b.p1, b.p2], { color: '#ff9800', weight: 6 }).addTo(map)); }
+                else { mapVisuals.push(L.circle([b.lat, b.lon], { color: 'red', fillColor: '#f03', fillOpacity: 0.15, radius: b.rozmer }).addTo(map)); }
+            });
+            let html = '<ul>'; mojeOtocneBody.forEach((b, i) => { html += `<li><strong>${i+1}. ${b.nazov}</strong> <button class="btn-del-single" onclick="
