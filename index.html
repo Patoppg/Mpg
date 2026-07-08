@@ -28,8 +28,8 @@
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
         th, td { border: 1px solid #555; padding: 8px; text-align: center; vertical-align: middle; }
         th { background: #333; }
-        .penale-input, .dekl-input { padding: 4px; background: #1e1e1e; color: white; border: 1px solid #666; text-align: center; border-radius: 3px; font-size: 14px; }
-        .penale-input { width: 50px; } .dekl-input { width: 70px; }
+        .penale-input, .dekl-input, .name-input { padding: 6px; background: #1e1e1e; color: white; border: 1px solid #666; text-align: center; border-radius: 3px; font-size: 14px; box-sizing: border-box; }
+        .penale-input { width: 55px; } .dekl-input { width: 70px; } .name-input { width: 130px; text-align: left; font-weight: bold; }
         .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; border: 1px solid #fff; vertical-align: middle; }
 
         @media print {
@@ -38,11 +38,13 @@
             #leaderboard-box { background: transparent; padding: 0; margin: 0; box-shadow: none; display: block !important; }
             #leaderboard-box h3 { color: black !important; font-size: 18px; margin-bottom: 15px; }
             .btn-group, button { display: none !important; }
-            table { width: 100%; border-collapse: collapse; font-size: 12px; color: black; }
-            th, td { border: 1px solid #000; padding: 6px; text-align: center; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; color: black; }
+            th, td { border: 1px solid #000; padding: 5px; text-align: center; }
             th { background: #eee !important; -webkit-print-color-adjust: exact; color: black !important; font-weight: bold; }
             td { background: transparent !important; color: black !important; }
-            .dekl-input, .penale-input { border: none; background: transparent; color: black; font-weight: bold; width: 100%; }
+            .dekl-input, .penale-input, .name-input { border: none; background: transparent; color: black; font-weight: bold; width: 100%; padding: 0; text-align: center; }
+            .name-input { text-align: left; }
+            .color-dot { display: none !important; }
         }
     </style>
 </head>
@@ -95,33 +97,13 @@
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
         let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
         
-        // Zoznam 25 odlišných farieb pre pretekárov
+        // 25 rôznych farieb stôp pre 25 pretekárov
         const farbyPiloti = [
-            '#FF1493', // Sýto ružová
-            '#00FFFF', // Azúrová
-            '#FF4500', // Oranžovo-červená
-            '#00FF00', // Neónovo zelená
-            '#FFD700', // Zlatá žltá
-            '#8A2BE2', // Fialová modrá
-            '#0000FF', // Čistá modrá
-            '#FF0000', // Čistá červená
-            '#32CD32', // Limetková
-            '#FF00FF', // Purpurová
-            '#FFA500', // Oranžová
-            '#008080', // Sivozelená
-            '#8B0000', // Tmavá červená
-            '#000080', // Námornícka modrá
-            '#00FA9A', // Jarná zelená
-            '#FF8C00', // Tmavá oranžová
-            '#4B0082', // Indigo
-            '#FF69B4', // Horúca ružová
-            '#00CED1', // Tmavá tyrkysová
-            '#A52A2A', // Hnedá
-            '#FFFF00', // Čistá žltá
-            '#7FFF00', // Žltozelená (Chartreuse)
-            '#DC143C', // Karmínová
-            '#00BFFF', // Hlboká nebeská modrá
-            '#9932CC'  // Tmavá orchidea
+            '#FF1493', '#00FFFF', '#FF4500', '#00FF00', '#FFD700', 
+            '#8A2BE2', '#0000FF', '#FF0000', '#32CD32', '#FF00FF', 
+            '#FFA500', '#008080', '#8B0000', '#000080', '#00FA9A', 
+            '#FF8C00', '#4B0082', '#FF69B4', '#00CED1', '#A52A2A', 
+            '#FFFF00', '#7FFF00', '#DC143C', '#00BFFF', '#9932CC'
         ];
 
         const bodIcon = L.divIcon({
@@ -236,14 +218,33 @@
             
             results.forEach((res, indexLetu) => {
                 let menoPilota = res.file.replace('.igc',''); let trackPoints = [];
+                let maxAlt = -9999; let minAlt = 99999;
+
                 res.text.split(/\r?\n/).forEach(r => {
                     if (r.startsWith('H') && r.toUpperCase().includes('PILOT')) { const idx = r.indexOf(':'); if(idx !== -1) { let mozne = r.substring(idx+1).trim(); if(mozne) menoPilota = mozne; } }
-                    if (r.startsWith('B') && r.length >= 24) { const cStr = r.substring(1, 7); const lat = parseCoord(r.substring(7, 15), false); const lon = parseCoord(r.substring(15, 24), true); const sec = parseInt(cStr.substring(0,2))*3600 + parseInt(cStr.substring(2,4))*60 + parseInt(cStr.substring(4,6)); trackPoints.push({ lat: lat, lon: lon, sekundy: sec }); }
+                    if (r.startsWith('B') && r.length >= 24) { 
+                        const cStr = r.substring(1, 7); 
+                        const lat = parseCoord(r.substring(7, 15), false); 
+                        const lon = parseCoord(r.substring(15, 24), true); 
+                        const sec = parseInt(cStr.substring(0,2))*3600 + parseInt(cStr.substring(2,4))*60 + parseInt(cStr.substring(4,6)); 
+                        trackPoints.push({ lat: lat, lon: lon, sekundy: sec });
+                        
+                        // Parsovanie GPS výšky (pozícia 30-35 v B riadku)
+                        if (r.length >= 35) {
+                            let gAlt = parseInt(r.substring(30, 35));
+                            if (!isNaN(gAlt) && gAlt > 0) {
+                                if (gAlt > maxAlt) maxAlt = gAlt;
+                                if (gAlt < minAlt) minAlt = gAlt;
+                            }
+                        }
+                    }
                 });
 
-                // Nastavenie farby na základe poradia
                 let farbaLetu = farbyPiloti[indexLetu % farbyPiloti.length];
                 let pl = L.polyline(trackPoints.map(p => [p.lat, p.lon]), { color: farbaLetu, weight: 4, opacity: 0.9 }).addTo(map);
+                
+                // Kliknutie na čiaru na mape zobrazí meno pilota
+                pl.bindPopup(`<b>Pilot: ${menoPilota}</b>`);
                 flightPolylines.push(pl);
 
                 let preletenePoradie = 0; 
@@ -272,7 +273,10 @@
                 let maCas = trafilStart && trafilCiel;
                 let casBase = maCas ? Math.abs(casCiela - casStartu) : 0;
                 
-                vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: maCas, deklarovanyText: "", deklarovanySec: 0, farba: farbaLetu });
+                if (minAlt === 99999) minAlt = 0;
+                if (maxAlt === -9999) maxAlt = 0;
+
+                vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: maCas, deklarovanyText: "", deklarovanySec: 0, farba: farbaLetu, minV: minAlt, maxV: maxAlt });
             });
             
             vyhodnotStatus();
@@ -300,6 +304,7 @@
             return body > 0 ? body : 0;
         }
 
+        window.zmenMeno = function(index, noveMeno) { vysledkyPiloti[index].meno = noveMeno; }
         window.zmenDeklarovany = function(index, text) {
             vysledkyPiloti[index].deklarovanyText = text;
             let parts = text.split(':');
@@ -307,7 +312,6 @@
             vysledkyPiloti[index].deklarovanySec = isNaN(sec) ? 0 : sec;
             vykresliLeaderboard();
         }
-
         window.zmenPenale = function(index, val) { vysledkyPiloti[index].penale = parseInt(val) || 0; vykresliLeaderboard(); }
 
         function vykresliLeaderboard() {
@@ -330,28 +334,33 @@
 
             let html = `<table><tr>
                 <th>#</th>
-                <th style="text-align:left;">Pilot (Stopa)</th>
+                <th style="text-align:left;">Pilot (Upraviť meno)</th>
                 <th>Trasa<br><small>(splnené)</small></th>
                 <th style="color:#2196F3;">Body<br><small>Trasa</small></th>
                 <th>Čas letu</th>
                 <th>Deklarácia<br><small>(mm:ss)</small></th>
-                <th>Penále<br><small>(s)</small></th>
+                <th>Penále<br><small>(sekundy)</small></th>
+                <th style="color:#e91e63;">Letová Výška<br><small>(Min / Max)</small></th>
                 <th style="color:#ff9800;">Body<br><small>Čas</small></th>
                 <th style="color:#4caf50; font-size:14px;">CELKOVO</th>
             </tr>`;
             
             vysledkyPiloti.forEach((p, i) => {
-                let celkovy = p.maCas ? formatCas(p.casBase + p.penale) : "Nedokončil";
+                let celkovy = p.maCas ? formatCas(p.casBase + p.penale) : "Nedokončil (Chýba brána)";
                 let casL = p.maCas ? formatCas(p.casBase) : "-";
                 
                 html += `<tr>
                     <td>${i+1}</td>
-                    <td style="text-align:left; white-space:nowrap;"><span class="color-dot" style="background:${p.farba};"></span><b>${p.meno}</b></td>
+                    <td style="text-align:left; white-space:nowrap;">
+                        <span class="color-dot" style="background:${p.farba};"></span>
+                        <input type="text" class="name-input" value="${p.meno}" onchange="zmenMeno(${i}, this.value)">
+                    </td>
                     <td>${p.splnene} / ${mojeOtocneBody.length}</td>
                     <td style="color:#2196F3; font-weight:bold;">${p.bodyOtocaky}</td>
                     <td>${casL}</td>
                     <td><input type="text" class="dekl-input" placeholder="mm:ss" value="${p.deklarovanyText}" onchange="zmenDeklarovany(${i}, this.value)"></td>
                     <td><input type="number" class="penale-input" value="${p.penale}" onchange="zmenPenale(${i}, this.value)"></td>
+                    <td style="color:#e91e63; font-weight:bold;">${p.minV}m / ${p.maxV}m</td>
                     <td style="color:#ff9800; font-weight:bold;">${p.bodyCas}</td>
                     <td style="background:#222; color:#4caf50; font-weight:bold; font-size:15px;">${p.bodySpolu}</td>
                 </tr>`;
@@ -361,8 +370,8 @@
         }
 
         window.exportovatDoCSV = function() {
-            let csv = "\uFEFFPoradie;Pilot;Pocet otocakov;Body za otocaky;Cisty cas (s);Deklarovany (s);Penalizacia (s);Body za cas;CELKOVE BODY\n";
-            vysledkyPiloti.forEach((p, i) => { csv += `${i+1};${p.meno};${p.splnene};${p.bodyOtocaky};${p.casBase};${p.deklarovanySec};${p.penale};${p.bodyCas};${p.bodySpolu}\n`; });
+            let csv = "\uFEFFPoradie;Pilot;Pocet otocakov;Body za otocaky;Cisty cas (s);Deklarovany (s);Penalizacia (s);Min vyska (m);Max vyska (m);Body za cas;CELKOVE BODY\n";
+            vysledkyPiloti.forEach((p, i) => { csv += `${i+1};${p.meno};${p.splnene};${p.bodyOtocaky};${p.casBase};${p.deklarovanySec};${p.penale};${p.minV};${p.maxV};${p.bodyCas};${p.bodySpolu}\n`; });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a');
             a.href = URL.createObjectURL(blob); a.download = "Vysledky.csv"; a.click();
         }
