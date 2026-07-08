@@ -17,9 +17,8 @@
         .input-text { width: 100%; padding: 10px; box-sizing: border-box; border-radius: 5px; border: 1px solid #444; background: #1e1e1e; color: white; margin-bottom: 10px; font-size: 16px; }
         .btn-group { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
         .btn { flex: 1; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; min-width: 100px; font-size: 14px; text-align: center; }
-        .btn-save { background: #4caf50; } .btn-kml { background: #ff9800; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e91e63; }
+        .btn-save { background: #4caf50; } .btn-gpx { background: #008CBA; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e91e63; }
         
-        /* Pevný rozmer mapy - koniec sivým plochám */
         #map { width: 100%; height: 500px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; display: block; }
         
         .track-list { list-style: none; padding: 0; display: flex; gap: 5px; flex-wrap: wrap; margin: 0 0 10px 0; }
@@ -41,7 +40,7 @@
         <div class="btn-group">
             <button class="btn btn-save" onclick="ulozitTratDoPamate()">Uložiť trať 💾</button>
             <button class="btn btn-download" onclick="stiahnutMapu()">Stiahnuť JPG 🖼️</button>
-            <button class="btn btn-kml" onclick="exportovatDoKML()">Stiahnuť KML 🛰️</button>
+            <button class="btn btn-gpx" onclick="exportovatDoGPX()">Stiahnuť GPX 🗺️</button>
             <button class="btn btn-qr" onclick="zobrazitQR()">QR Kód 📱</button>
             <button class="btn btn-reset" onclick="vynulovatTrat()">Vyčistiť 🔄</button>
         </div>
@@ -88,7 +87,6 @@
         function inicializujMapu() {
             map = L.map('map').setView([48.461, 17.518], 11);
             
-            // crossOrigin: true je KRITICKÉ pre to, aby sa dala mapa stiahnuť do JPG
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
                 maxZoom: 19,
                 crossOrigin: true
@@ -102,18 +100,12 @@
             setTimeout(() => { if(map) map.invalidateSize(); }, 500);
         }
 
-        // --- FUNKCIA NA STIAHNUTIE MAPY DO JPG ---
         window.stiahnutMapu = function() {
-            if (mojeOtocneBody.length === 0) {
-                alert("Najprv pridaj body na mapu!");
-                return;
-            }
+            if (mojeOtocneBody.length === 0) return alert("Najprv pridaj body na mapu!");
 
-            // Skryjeme zoom tlačidlá, aby neboli na fotke
             const uiControls = document.querySelector('.leaflet-control-container');
             if(uiControls) uiControls.style.display = 'none';
 
-            // Zameriame na body pred fotením
             let bodyPreZoom = [];
             mojeOtocneBody.forEach(b => {
                 if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]], [b.p2[0], b.p2[1]]); }
@@ -125,20 +117,18 @@
                 html2canvas(document.getElementById('map'), {
                     useCORS: true,
                     allowTaint: false,
-                    scale: 2 // Dvojnásobné rozlíšenie pre lepšiu ostrosť
+                    scale: 2 
                 }).then(canvas => {
                     let link = document.createElement('a');
                     link.download = 'MPG_Mapa_Trate.jpg';
                     link.href = canvas.toDataURL('image/jpeg', 0.9);
                     link.click();
-                    
-                    // Vrátime ovládanie mapy
                     if(uiControls) uiControls.style.display = 'block';
                 }).catch(err => {
-                    alert("Chyba pri sťahovaní mapy: " + err);
+                    alert("Chyba: " + err);
                     if(uiControls) uiControls.style.display = 'block';
                 });
-            }, 1000); // Počká 1 sekundu na vykreslenie
+            }, 1000); 
         }
 
         function mapClickAction(e) {
@@ -200,13 +190,38 @@
             qrBox.style.display = "block"; 
         }
 
-        function exportovatDoKML() {
+        // --- NOVÁ FUNKCIA PRE GPX (VOLITEĽNÁ ČIARA) ---
+        window.exportovatDoGPX = function() {
             if (mojeOtocneBody.length === 0) return alert("Zoznam bodov je prázdny!");
-            let kml = '<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>';
-            mojeOtocneBody.forEach(b => { kml += `<Placemark><name>${b.nazov}</name><Point><coordinates>${b.lon},${b.lat},0</coordinates></Point></Placemark>`; });
-            kml += '</Document></kml>';
-            const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "MPG_Task.kml"; a.click();
+            
+            // Otázka na vykreslenie čiary
+            let spojitCiara = confirm("Chceš, aby boli otočné body na mape pospájané čiarou v poradí, v akom si ich zadal?\n\n[OK] = Áno, vytvoriť trasu\n[Zrušiť] = Nie, iba samostatné body");
+            
+            let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="MPG Organizer" xmlns="http://www.topografix.com/GPX/1/1">\n';
+            
+            // 1. Zápis samotných bodov (Waypoints)
+            mojeOtocneBody.forEach((b, i) => {
+                gpx += `<wpt lat="${b.lat.toFixed(6)}" lon="${b.lon.toFixed(6)}">\n`;
+                gpx += `  <name>${i+1}. ${b.nazov}</name>\n`;
+                gpx += `</wpt>\n`;
+            });
+
+            // 2. Zápis trasy - čiary (Route), iba ak používateľ zvolil OK
+            if (spojitCiara) {
+                gpx += `<rte>\n  <name>Trasa pretekov</name>\n`;
+                mojeOtocneBody.forEach(b => {
+                     gpx += `  <rtept lat="${b.lat.toFixed(6)}" lon="${b.lon.toFixed(6)}"></rtept>\n`;
+                });
+                gpx += `</rte>\n`;
+            }
+            
+            gpx += '</gpx>';
+            
+            const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+            const a = document.createElement('a'); 
+            a.href = URL.createObjectURL(blob); 
+            a.download = "MPG_Trasa.gpx"; 
+            a.click();
         }
 
         function parseCoord(str, isLon) { let d = parseFloat(str.substring(0, isLon ? 3 : 2)); let m = parseFloat(str.substring(isLon ? 3 : 2)) / 60000; return d + m; }
