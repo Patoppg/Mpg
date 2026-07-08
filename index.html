@@ -26,15 +26,14 @@
         .btn-del-single { background: #f44336; color: white; border: none; padding: 2px 6px; border-radius: 4px; margin-left: 10px; cursor: pointer; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-        th, td { border: 1px solid #555; padding: 8px; text-align: center; }
+        th, td { border: 1px solid #555; padding: 8px; text-align: center; vertical-align: middle; }
         th { background: #333; }
         .penale-input, .dekl-input { padding: 4px; background: #1e1e1e; color: white; border: 1px solid #666; text-align: center; border-radius: 3px; font-size: 14px; }
         .penale-input { width: 50px; } .dekl-input { width: 70px; }
+        .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; border: 1px solid #fff; vertical-align: middle; }
 
-        /* Tlačový formát IBA pre výsledkovú listinu */
         @media print {
             body { background: white; color: black; margin: 0; padding: 0; }
-            /* Skryjeme vsetky boxy okrem leaderboardu */
             body > div.card:not(#leaderboard-box) { display: none !important; }
             #leaderboard-box { background: transparent; padding: 0; margin: 0; box-shadow: none; display: block !important; }
             #leaderboard-box h3 { color: black !important; font-size: 18px; margin-bottom: 15px; }
@@ -96,6 +95,22 @@
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
         let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
         
+        // Paleta výrazných a ľahko odlíšiteľných farieb pre pilotov
+        const farbyPiloti = [
+            '#FF1493', // Sýto ružová
+            '#00FFFF', // Azúrová (Cyan)
+            '#FF4500', // Oranžovo-červená
+            '#00FF00', // Neónovo zelená
+            '#FFD700', // Zlatá žltá
+            '#8A2BE2', // Fialová modrá
+            '#0000FF', // Čistá modrá
+            '#FF0000', // Čistá červená
+            '#32CD32', // Limetková
+            '#FF00FF', // Purpurová (Magenta)
+            '#FFA500', // Oranžová
+            '#008080'  // Sivozelená (Teal)
+        ];
+
         const bodIcon = L.divIcon({
             className: 'custom-icon',
             html: "<div style='background:#e91e63; width:14px; height:14px; border-radius:50%; border:2px solid white; box-shadow:0 0 3px black;'></div>",
@@ -104,48 +119,27 @@
 
         function inicializujMapu() {
             map = L.map('map').setView([48.461, 17.518], 11);
-            
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
-                maxZoom: 19,
-                crossOrigin: true
-            }).addTo(map);
-            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, crossOrigin: true }).addTo(map);
             L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
-
             nacitatVsetkyTrateZPamate();
             map.on('click', mapClickAction);
-            
             setTimeout(() => { if(map) map.invalidateSize(); }, 500);
         }
 
         window.stiahnutMapu = function() {
             if (mojeOtocneBody.length === 0) return alert("Najprv pridaj body na mapu!");
-
             const uiControls = document.querySelector('.leaflet-control-container');
             if(uiControls) uiControls.style.display = 'none';
-
             let bodyPreZoom = [];
             mojeOtocneBody.forEach(b => {
-                if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]], [b.p2[0], b.p2[1]]); }
-                else { bodyPreZoom.push([b.lat, b.lon]); }
+                if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]], [b.p2[0], b.p2[1]]); } else { bodyPreZoom.push([b.lat, b.lon]); }
             });
             if (bodyPreZoom.length > 0) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [30, 30] });
-
             setTimeout(() => {
-                html2canvas(document.getElementById('map'), {
-                    useCORS: true,
-                    allowTaint: false,
-                    scale: 2 
-                }).then(canvas => {
-                    let link = document.createElement('a');
-                    link.download = 'MPG_Mapa_Trate.jpg';
-                    link.href = canvas.toDataURL('image/jpeg', 0.9);
-                    link.click();
+                html2canvas(document.getElementById('map'), { useCORS: true, allowTaint: false, scale: 2 }).then(canvas => {
+                    let link = document.createElement('a'); link.download = 'MPG_Mapa_Trate.jpg'; link.href = canvas.toDataURL('image/jpeg', 0.9); link.click();
                     if(uiControls) uiControls.style.display = 'block';
-                }).catch(err => {
-                    alert("Chyba: " + err);
-                    if(uiControls) uiControls.style.display = 'block';
-                });
+                }).catch(err => { alert("Chyba: " + err); if(uiControls) uiControls.style.display = 'block'; });
             }, 1000); 
         }
 
@@ -194,49 +188,31 @@
         }
 
         window.zmazatBod = function(i) { mojeOtocneBody.splice(i, 1); prekresliVsetkyBody(); }
-        
         function ulozitTratDoPamate() { const meno = document.getElementById('task-name-input').value; if(!meno) return; vsetkyTrate[meno] = mojeOtocneBody; localStorage.setItem('mpg_trate_data', JSON.stringify(vsetkyTrate)); vykresliZoznamUlozenychTrati(); }
         function nacitatVsetkyTrateZPamate() { const d = localStorage.getItem('mpg_trate_data'); if (d) { vsetkyTrate = JSON.parse(d); vykresliZoznamUlozenychTrati(); } }
         function vykresliZoznamUlozenychTrati() { const ul = document.getElementById('ulozene-trate-list'); ul.innerHTML = ""; Object.keys(vsetkyTrate).forEach(m => { const li = document.createElement('li'); li.className = 'track-item'; li.innerText = m; li.onclick = () => { mojeOtocneBody = vsetkyTrate[m]; prekresliVsetkyBody(); }; ul.appendChild(li); }); }
         function vynulovatTrat() { mojeOtocneBody = []; prekresliVsetkyBody(); document.getElementById('qrcode-container').style.display="none"; }
-        
-        function zobrazitQR() { 
-            const qrBox = document.getElementById('qrcode-container'); 
-            qrBox.innerHTML = "<h4 style='color:black; margin:0 0 10px 0;'>Naskenovať otočné body</h4>"; 
-            const minified = mojeOtocneBody.map(b => `${b.nazov}|${b.lat.toFixed(5)}|${b.lon.toFixed(5)}`).join(';'); 
-            new QRCode(qrBox, { text: minified, width: 200, height: 200 }); 
-            qrBox.style.display = "block"; 
-        }
+        function zobrazitQR() { const qrBox = document.getElementById('qrcode-container'); qrBox.innerHTML = "<h4 style='color:black; margin:0 0 10px 0;'>Naskenovať otočné body</h4>"; const minified = mojeOtocneBody.map(b => `${b.nazov}|${b.lat.toFixed(5)}|${b.lon.toFixed(5)}`).join(';'); new QRCode(qrBox, { text: minified, width: 200, height: 200 }); qrBox.style.display = "block"; }
 
         window.exportovatDoGPX = function() {
             if (mojeOtocneBody.length === 0) return alert("Zoznam bodov je prázdny!");
             let spojitCiara = confirm("Chceš, aby boli otočné body na mape pospájané čiarou v poradí, v akom si ich zadal?\n\n[OK] = Áno, vytvoriť trasu\n[Zrušiť] = Nie, iba samostatné body");
             
             let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="MPG Organizer" xmlns="http://www.topografix.com/GPX/1/1">\n';
-            mojeOtocneBody.forEach((b, i) => {
-                gpx += `<wpt lat="${b.lat.toFixed(6)}" lon="${b.lon.toFixed(6)}">\n`;
-                gpx += `  <name>${i+1}. ${b.nazov}</name>\n`;
-                gpx += `</wpt>\n`;
-            });
+            mojeOtocneBody.forEach((b, i) => { gpx += `<wpt lat="${b.lat.toFixed(6)}" lon="${b.lon.toFixed(6)}">\n  <name>${i+1}. ${b.nazov}</name>\n</wpt>\n`; });
             if (spojitCiara) {
                 gpx += `<rte>\n  <name>Trasa pretekov</name>\n`;
                 mojeOtocneBody.forEach(b => { gpx += `  <rtept lat="${b.lat.toFixed(6)}" lon="${b.lon.toFixed(6)}"></rtept>\n`; });
                 gpx += `</rte>\n`;
             }
             gpx += '</gpx>';
-            
-            const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-            const a = document.createElement('a'); 
-            a.href = URL.createObjectURL(blob); 
-            a.download = "MPG_Trasa.gpx"; 
-            a.click();
+            const blob = new Blob([gpx], { type: 'application/gpx+xml' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "MPG_Trasa.gpx"; a.click();
         }
 
         function parseCoord(str, isLon) { let d = parseFloat(str.substring(0, isLon ? 3 : 2)); let m = parseFloat(str.substring(isLon ? 3 : 2)) / 60000; return d + m; }
         function getDist(lat1, lon1, lat2, lon2) { const R=6371000; const dLat=(lat2-lat1)*Math.PI/180; const dLon=(lon2-lon1)*Math.PI/180; const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2); return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
         function ciarySaPretinaju(A,B,C,D) { function ccw(p1,p2,p3){return(p3[0]-p1[0])*(p2[1]-p1[1])>(p2[0]-p1[0])*(p3[1]-p1[1]);} return(ccw(A,C,D)!==ccw(B,C,D))&&(ccw(A,B,C)!==ccw(A,B,D)); }
         function formatCas(s) { const h = Math.floor(s/3600); const m = Math.floor((s%3600)/60); const sec = s%60; return (h>0?h+"h ":"")+m+"m "+sec+"s"; }
-
         const citajSubor = (file) => new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => resolve({ text: e.target.result, file: file.name }); reader.readAsText(file); });
 
         document.getElementById('igc-input').addEventListener('change', async function(e) {
@@ -245,26 +221,47 @@
             
             const results = await Promise.all(files.map(f => citajSubor(f)));
             
-            results.forEach(res => {
+            results.forEach((res, indexLetu) => {
                 let menoPilota = res.file.replace('.igc',''); let trackPoints = [];
                 res.text.split(/\r?\n/).forEach(r => {
                     if (r.startsWith('H') && r.toUpperCase().includes('PILOT')) { const idx = r.indexOf(':'); if(idx !== -1) { let mozne = r.substring(idx+1).trim(); if(mozne) menoPilota = mozne; } }
                     if (r.startsWith('B') && r.length >= 24) { const cStr = r.substring(1, 7); const lat = parseCoord(r.substring(7, 15), false); const lon = parseCoord(r.substring(15, 24), true); const sec = parseInt(cStr.substring(0,2))*3600 + parseInt(cStr.substring(2,4))*60 + parseInt(cStr.substring(4,6)); trackPoints.push({ lat: lat, lon: lon, sekundy: sec }); }
                 });
 
-                let pl = L.polyline(trackPoints.map(p => [p.lat, p.lon]), { color: '#' + Math.floor(Math.random()*16777215).toString(16), weight: 3, opacity: 0.7 }).addTo(map);
+                // Zoberie výraznú farbu podľa poradia nahrávaného letu
+                let farbaLetu = farbyPiloti[indexLetu % farbyPiloti.length];
+                let pl = L.polyline(trackPoints.map(p => [p.lat, p.lon]), { color: farbaLetu, weight: 4, opacity: 0.9 }).addTo(map);
                 flightPolylines.push(pl);
 
-                let preletenePoradie = 0; let casyPreletov = [];
+                let preletenePoradie = 0; 
+                let trafilStart = false; let casStartu = 0;
+                let trafilCiel = false;  let casCiela = 0;
+
                 mojeOtocneBody.forEach(bod => {
                     let preleteny = false; let secPreletu = 0;
-                    if (bod.typ === "gate") { for (let i=1; i<trackPoints.length; i++) { if (ciarySaPretinaju([trackPoints[i-1].lat, trackPoints[i-1].lon], [trackPoints[i].lat, trackPoints[i].lon], bod.p1, bod.p2)) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; } } } 
-                    else { for (let i=0; i<trackPoints.length; i++) { if (getDist(trackPoints[i].lat, trackPoints[i].lon, bod.lat, bod.lon) <= bod.rozmer) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; } } }
-                    if(preleteny) { preletenePoradie++; casyPreletov.push(secPreletu); }
+                    if (bod.typ === "gate") { 
+                        for (let i=1; i<trackPoints.length; i++) { 
+                            if (ciarySaPretinaju([trackPoints[i-1].lat, trackPoints[i-1].lon], [trackPoints[i].lat, trackPoints[i].lon], bod.p1, bod.p2)) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; } 
+                        } 
+                    } else { 
+                        for (let i=0; i<trackPoints.length; i++) { 
+                            if (getDist(trackPoints[i].lat, trackPoints[i].lon, bod.lat, bod.lon) <= bod.rozmer) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; } 
+                        } 
+                    }
+                    
+                    if(preleteny) { 
+                        preletenePoradie++; 
+                        // Zaznamenanie času len ak ide presne o brány s názvom START a CIEL
+                        if (bod.nazov === "START") { trafilStart = true; casStartu = secPreletu; }
+                        if (bod.nazov === "CIEL") { trafilCiel = true; casCiela = secPreletu; }
+                    }
                 });
 
-                let casBase = (casyPreletov.length >= 2) ? Math.max(...casyPreletov) - Math.min(...casyPreletov) : 0;
-                vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: (casyPreletov.length >= 2), deklarovanyText: "", deklarovanySec: 0 });
+                // Čas sa ráta JEDINE vtedy, ak pilot naozaj preletel START a rovnako aj CIEL
+                let maCas = trafilStart && trafilCiel;
+                let casBase = maCas ? Math.abs(casCiela - casStartu) : 0;
+                
+                vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: maCas, deklarovanyText: "", deklarovanySec: 0, farba: farbaLetu });
             });
             
             vyhodnotStatus();
@@ -308,6 +305,7 @@
             
             vysledkyPiloti.forEach(p => {
                 let realnyCas = p.maCas ? (p.casBase + p.penale) : 0;
+                // Ak nemá čas (netrafil Start/Ciel), automaticky má 0 bodov za čas, nezávisle od deklarácie
                 p.bodyCas = p.maCas ? vypocitajBodyZCasu(realnyCas, p.deklarovanySec) : 0;
                 p.bodyOtocaky = p.splnene * 2;
                 p.bodySpolu = p.bodyOtocaky + p.bodyCas;
@@ -320,10 +318,9 @@
                 return casA - casB;
             });
 
-            // ROZDELENÁ A PREHĽADNÁ TABUĽKA BODOV
             let html = `<table><tr>
                 <th>#</th>
-                <th>Pilot</th>
+                <th style="text-align:left;">Pilot (Stopa)</th>
                 <th>Trasa<br><small>(splnené)</small></th>
                 <th style="color:#2196F3;">Body<br><small>Trasa</small></th>
                 <th>Čas letu</th>
@@ -336,9 +333,13 @@
             vysledkyPiloti.forEach((p, i) => {
                 let celkovy = p.maCas ? formatCas(p.casBase + p.penale) : "Nedokončil";
                 let casL = p.maCas ? formatCas(p.casBase) : "-";
+                
+                // Zvýraznenie chyby, ak pilot netrafil Start alebo Ciel
+                let celkovyStyle = p.maCas ? "color:#ff9800; font-weight:bold;" : "color:#f44336; font-weight:bold;";
+                
                 html += `<tr>
                     <td>${i+1}</td>
-                    <td><b>${p.meno}</b></td>
+                    <td style="text-align:left; white-space:nowrap;"><span class="color-dot" style="background:${p.farba};"></span><b>${p.meno}</b></td>
                     <td>${p.splnene} / ${mojeOtocneBody.length}</td>
                     <td style="color:#2196F3; font-weight:bold;">${p.bodyOtocaky}</td>
                     <td>${casL}</td>
