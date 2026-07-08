@@ -185,7 +185,16 @@
         window.zmazatBod = function(i) { mojeOtocneBody.splice(i, 1); prekresliVsetkyBody(); }
         function ulozitTratDoPamate() { const meno = document.getElementById('task-name-input').value; if(!meno) return; vsetkyTrate[meno] = mojeOtocneBody; localStorage.setItem('mpg_trate_data', JSON.stringify(vsetkyTrate)); vykresliZoznamUlozenychTrati(); }
         function nacitatVsetkyTrateZPamate() { const d = localStorage.getItem('mpg_trate_data'); if (d) { vsetkyTrate = JSON.parse(d); vykresliZoznamUlozenychTrati(); } }
-        function vykresliZoznamUlozenychTrati() { const ul = document.getElementById('ulozene-trate-list'); ul.innerHTML = ""; Object.keys(vsetkyTrate).forEach(m => { const li = document.createElement('li'); li.className = 'track-item'; li.innerText = m; li.onclick = () => { mojeOtocneBody = vsetkyTrate[m]; prekresliVsetkyBody(); }; ul.appendChild(li); }); }
+        
+        function vykresliZoznamUlozenychTrati() { 
+            const ul = document.getElementById('ulozene-trate-list'); ul.innerHTML = ""; 
+            Object.keys(vsetkyTrate).forEach(m => { 
+                const li = document.createElement('li'); li.className = 'track-item'; li.innerText = m; 
+                li.onclick = () => { mojeOtocneBody = vsetkyTrate[m]; prekresliVsetkyBody(); }; 
+                ul.appendChild(li); 
+            }); 
+        }
+        
         function vynulovatTrat() { mojeOtocneBody = []; prekresliVsetkyBody(); document.getElementById('qrcode-container').style.display="none"; }
         function zobrazitQR() { const qrBox = document.getElementById('qrcode-container'); qrBox.innerHTML = "<h4 style='color:black; margin:0 0 10px 0;'>Naskenovať otočné body</h4>"; const minified = mojeOtocneBody.map(b => `${b.nazov}|${b.lat.toFixed(5)}|${b.lon.toFixed(5)}`).join(';'); new QRCode(qrBox, { text: minified, width: 200, height: 200 }); qrBox.style.display = "block"; }
 
@@ -206,93 +215,3 @@
                 mojeOtocneBody.forEach(b => { gpx += `  <rtept lat="${b.lat.toFixed(6)}" lon="${b.lon.toFixed(6)}"></rtept>\n`; });
                 gpx += `</rte>\n`;
             }
-            gpx += '</gpx>';
-            const blob = new Blob([gpx], { type: 'application/gpx+xml' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "MPG_Trasa.gpx"; a.click();
-        }
-
-        window.importovatGPX = function(e) {
-            const file = e.target.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                try {
-                    const parser = new DOMParser(); const xmlDoc = parser.parseFromString(evt.target.result, "text/xml");
-                    const wpts = xmlDoc.getElementsByTagName("wpt"); if (wpts.length === 0) return alert("V súbore sa nenašli žiadne otočné body!");
-                    
-                    mojeOtocneBody = [];
-                    for (let i = 0; i < wpts.length; i++) {
-                        let node = wpts[i]; let lat = parseFloat(node.getAttribute("lat")); let lon = parseFloat(node.getAttribute("lon"));
-                        let nameNode = node.getElementsByTagName("name")[0]; let nazov = nameNode ? nameNode.textContent : "Bod";
-                        nazov = nazov.replace(/^\d+\.\s*/, "").toUpperCase();
-                        let descNode = node.getElementsByTagName("desc")[0]; let descText = descNode ? descNode.textContent : "";
-                        let typ = "cylinder"; let rozmer = 100; let p1 = null; let p2 = null;
-
-                        if (descText && descText.startsWith("MPG_META:")) {
-                            let parts = descText.replace("MPG_META:", "").split(";");
-                            parts.forEach(p => {
-                                let kv = p.split("=");
-                                if (kv[0] === "typ") typ = kv[1];
-                                if (kv[0] === "rozmer") rozmer = parseInt(kv[1]) || 100;
-                                if (kv[0] === "p1" && kv[1]) p1 = kv[1].split(",").map(Number);
-                                if (kv[0] === "p2" && kv[1]) p2 = kv[1].split(",").map(Number);
-                            });
-                        } else {
-                            if (nazov === "START" || nazov === "CIEL") { typ = "gate"; p1 = [lat - 0.0005, lon - 0.0005]; p2 = [lat + 0.0005, lon + 0.0005]; }
-                        }
-                        mojeOtocneBody.push({ nazov: nazov, typ: typ, lat: lat, lon: lon, rozmer: rozmer, p1: p1, p2: p2 });
-                    }
-                    prekresliVsetkyBody();
-                    let bodyPreZoom = [];
-                    mojeOtocneBody.forEach(b => { if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]], [b.p2[0], b.p2[1]]); } else { bodyPreZoom.push([b.lat, b.lon]); } });
-                    if (bodyPreZoom.length > 0 && map) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [40, 40] });
-                    alert(`Trať úspešne načítaná (${mojeOtocneBody.length} bodov)!`);
-                } catch(err) { alert("Chyba pri importe GPX: " + err); }
-            };
-            reader.readAsText(file); e.target.value = ""; 
-        }
-
-        function parseCoord(str, isLon) { let d = parseFloat(str.substring(0, isLon ? 3 : 2)); let m = parseFloat(str.substring(isLon ? 3 : 2)) / 60000; return d + m; }
-        function getDist(lat1, lon1, lat2, lon2) { const R=6371000; const dLat=(lat2-lat1)*Math.PI/180; const dLon=(lon2-lon1)*Math.PI/180; const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2); return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
-        function ciarySaPretinaju(A,B,C,D) { function ccw(p1,p2,p3){return(p3[0]-p1[0])*(p2[1]-p1[1])>(p2[0]-p1[0])*(p3[1]-p1[1]);} return(ccw(A,C,D)!==ccw(B,C,D))&&(ccw(A,B,C)!==ccw(A,B,D)); }
-        function formatCas(s) { const h = Math.floor(s/3600); const m = Math.floor((s%3600)/60); const sec = s%60; return (h>0?h+"h ":"")+m+"m "+sec+"s"; }
-        const citajSubor = (file) => new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => resolve({ text: e.target.result, file: file.name }); reader.readAsText(file); });
-
-        document.getElementById('igc-input').addEventListener('change', async function(e) {
-            const files = Array.from(e.target.files); if (files.length === 0) return;
-            vysledkyPiloti = []; flightPolylines.forEach(pl => map.removeLayer(pl)); flightPolylines = [];
-            const results = await Promise.all(files.map(f => citajSubor(f)));
-            
-            results.forEach((res, indexLetu) => {
-                let menoPilota = res.file.replace('.igc',''); let trackPoints = [];
-                res.text.split(/\r?\n/).forEach(r => {
-                    if (r.startsWith('H') && r.toUpperCase().includes('PILOT')) { const idx = r.indexOf(':'); if(idx !== -1) { let mozne = r.substring(idx+1).trim(); if(mozne) menoPilota = mozne; } }
-                    if (r.startsWith('B') && r.length >= 24) { 
-                        const cStr = r.substring(1, 7); const lat = parseCoord(r.substring(7, 15), false); const lon = parseCoord(r.substring(15, 24), true); const sec = parseInt(cStr.substring(0,2))*3600 + parseInt(cStr.substring(2,4))*60 + parseInt(cStr.substring(4,6)); 
-                        trackPoints.push({ lat: lat, lon: lon, sekundy: sec });
-                    }
-                });
-
-                let farbaLetu = farbyPiloti[indexLetu % farbyPiloti.length];
-                let pl = L.polyline(trackPoints.map(p => [p.lat, p.lon]), { color: farbaLetu, weight: 4, opacity: 0.9 }).addTo(map);
-                pl.bindPopup(`<b>Pilot: ${menoPilota}</b>`); flightPolylines.push(pl);
-
-                let preletenePoradie = 0; let trafilStart = false; let casStartu = 0; let trafilCiel = false; let casCiela = 0;
-                mojeOtocneBody.forEach(bod => {
-                    let preleteny = false; let secPreletu = 0;
-                    if (bod.typ === "gate") { for (let i=1; i<trackPoints.length; i++) { if (ciarySaPretinaju([trackPoints[i-1].lat, trackPoints[i-1].lon], [trackPoints[i].lat, trackPoints[i].lon], bod.p1, bod.p2)) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; } } } 
-                    else { for (let i=0; i<trackPoints.length; i++) { if (getDist(trackPoints[i].lat, trackPoints[i].lon, bod.lat, bod.lon) <= bod.rozmer) { preleteny = true; secPreletu = trackPoints[i].sekundy; break; } } }
-                    if(preleteny) { preletenePoradie++; if (bod.nazov === "START") { trafilStart = true; casStartu = secPreletu; } if (bod.nazov === "CIEL") { trafilCiel = true; casCiela = secPreletu; } }
-                });
-
-                let maCas = trafilStart && trafilCiel; let casBase = maCas ? Math.abs(casCiela - casStartu) : 0;
-                vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: maCas, deklarovanyText: "", deklarovanySec: 0, farba: farbaLetu });
-            });
-            vyhodnotStatus(); if(flightPolylines.length > 0 && map) map.fitBounds(flightPolylines[0].getBounds());
-            vykresliLeaderboard();
-        });
-
-        window.vyhodnotStatus = function() {
-            const pocetCakanych = parseInt(document.getElementById('pocet-pretekarov').value) || 0; const pocetNahratych = vysledkyPiloti.length; const statusEl = document.getElementById('upload-status');
-            if (pocetCakanych > 0) {
-                if (pocetNahratych === pocetCakanych) { statusEl.innerHTML = `✅ Všetky lety nahraté (${pocetNahratych}/${pocetCakanych})`; statusEl.style.color = '#4caf50'; } 
-                else if (pocetNahratych < pocetCakanych) { statusEl.innerHTML = `⚠️ Chýbajú lety (${pocetNahratych}/${pocetCakanych})`; statusEl.style.color = '#ff9800'; }
-                else { statusEl.innerHTML = `❓ Viac letov ako pretekárov (${pocetNahratych}/${pocetCakanych})`; statusEl.style.color = '#e91e6
