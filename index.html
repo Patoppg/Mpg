@@ -17,7 +17,7 @@
         .input-text { width: 100%; padding: 10px; box-sizing: border-box; border-radius: 5px; border: 1px solid #444; background: #1e1e1e; color: white; margin-bottom: 10px; font-size: 16px; }
         .btn-group { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
         .btn { flex: 1; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; min-width: 100px; font-size: 14px; text-align: center; }
-        .btn-save { background: #4caf50; } .btn-gpx { background: #008CBA; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e91e63; }
+        .btn-save { background: #4caf50; } .btn-gpx { background: #008CBA; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e91e63; } .btn-print-table { background: #ff9800; }
         
         #map { width: 100%; height: 500px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; display: block; }
         
@@ -30,6 +30,21 @@
         th { background: #333; }
         .penale-input, .dekl-input { padding: 4px; background: #1e1e1e; color: white; border: 1px solid #666; text-align: center; border-radius: 3px; font-size: 14px; }
         .penale-input { width: 50px; } .dekl-input { width: 70px; }
+
+        /* Tlačový formát IBA pre výsledkovú listinu */
+        @media print {
+            body { background: white; color: black; margin: 0; padding: 0; }
+            /* Skryjeme vsetky boxy okrem leaderboardu */
+            body > div.card:not(#leaderboard-box) { display: none !important; }
+            #leaderboard-box { background: transparent; padding: 0; margin: 0; box-shadow: none; display: block !important; }
+            #leaderboard-box h3 { color: black !important; font-size: 18px; margin-bottom: 15px; }
+            .btn-group, button { display: none !important; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; color: black; }
+            th, td { border: 1px solid #000; padding: 6px; text-align: center; }
+            th { background: #eee !important; -webkit-print-color-adjust: exact; color: black !important; font-weight: bold; }
+            td { background: transparent !important; color: black !important; }
+            .dekl-input, .penale-input { border: none; background: transparent; color: black; font-weight: bold; width: 100%; }
+        }
     </style>
 </head>
 <body>
@@ -70,7 +85,10 @@
 
     <div class="card" id="leaderboard-box" style="display:none; overflow-x:auto;">
         <h3>🏆 Výsledková listina</h3>
-        <button class="btn btn-csv" onclick="exportovatDoCSV()" style="margin-bottom:10px;">Stiahnuť CSV 📊</button>
+        <div class="btn-group" style="margin-bottom:15px;">
+            <button class="btn btn-csv" onclick="exportovatDoCSV()">Stiahnuť CSV 📊</button>
+            <button class="btn btn-print-table" onclick="window.print()">Tlačiť výsledky 🖨️</button>
+        </div>
         <div id="leaderboard-table-container"></div>
     </div>
 
@@ -190,31 +208,21 @@
             qrBox.style.display = "block"; 
         }
 
-        // --- NOVÁ FUNKCIA PRE GPX (VOLITEĽNÁ ČIARA) ---
         window.exportovatDoGPX = function() {
             if (mojeOtocneBody.length === 0) return alert("Zoznam bodov je prázdny!");
-            
-            // Otázka na vykreslenie čiary
             let spojitCiara = confirm("Chceš, aby boli otočné body na mape pospájané čiarou v poradí, v akom si ich zadal?\n\n[OK] = Áno, vytvoriť trasu\n[Zrušiť] = Nie, iba samostatné body");
             
             let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="MPG Organizer" xmlns="http://www.topografix.com/GPX/1/1">\n';
-            
-            // 1. Zápis samotných bodov (Waypoints)
             mojeOtocneBody.forEach((b, i) => {
                 gpx += `<wpt lat="${b.lat.toFixed(6)}" lon="${b.lon.toFixed(6)}">\n`;
                 gpx += `  <name>${i+1}. ${b.nazov}</name>\n`;
                 gpx += `</wpt>\n`;
             });
-
-            // 2. Zápis trasy - čiary (Route), iba ak používateľ zvolil OK
             if (spojitCiara) {
                 gpx += `<rte>\n  <name>Trasa pretekov</name>\n`;
-                mojeOtocneBody.forEach(b => {
-                     gpx += `  <rtept lat="${b.lat.toFixed(6)}" lon="${b.lon.toFixed(6)}"></rtept>\n`;
-                });
+                mojeOtocneBody.forEach(b => { gpx += `  <rtept lat="${b.lat.toFixed(6)}" lon="${b.lon.toFixed(6)}"></rtept>\n`; });
                 gpx += `</rte>\n`;
             }
-            
             gpx += '</gpx>';
             
             const blob = new Blob([gpx], { type: 'application/gpx+xml' });
@@ -312,22 +320,32 @@
                 return casA - casB;
             });
 
+            // ROZDELENÁ A PREHĽADNÁ TABUĽKA BODOV
             let html = `<table><tr>
-                <th>#</th><th>Pilot</th><th>Otočné body</th><th>Čas letu</th>
-                <th>Deklarovaný čas<br><small>(mm:ss)</small></th><th>Penále (s)</th><th>Celkový čas</th><th style="color:#4caf50;">BODY SPOLU</th>
+                <th>#</th>
+                <th>Pilot</th>
+                <th>Trasa<br><small>(splnené)</small></th>
+                <th style="color:#2196F3;">Body<br><small>Trasa</small></th>
+                <th>Čas letu</th>
+                <th>Deklarácia<br><small>(mm:ss)</small></th>
+                <th>Penále<br><small>(s)</small></th>
+                <th style="color:#ff9800;">Body<br><small>Čas</small></th>
+                <th style="color:#4caf50; font-size:14px;">CELKOVO</th>
             </tr>`;
             
             vysledkyPiloti.forEach((p, i) => {
                 let celkovy = p.maCas ? formatCas(p.casBase + p.penale) : "Nedokončil";
                 let casL = p.maCas ? formatCas(p.casBase) : "-";
                 html += `<tr>
-                    <td>${i+1}</td><td><b>${p.meno}</b></td>
-                    <td>${p.splnene} / ${mojeOtocneBody.length} <br><small style="color:#aaa;">(+${p.bodyOtocaky}b)</small></td>
+                    <td>${i+1}</td>
+                    <td><b>${p.meno}</b></td>
+                    <td>${p.splnene} / ${mojeOtocneBody.length}</td>
+                    <td style="color:#2196F3; font-weight:bold;">${p.bodyOtocaky}</td>
                     <td>${casL}</td>
                     <td><input type="text" class="dekl-input" placeholder="mm:ss" value="${p.deklarovanyText}" onchange="zmenDeklarovany(${i}, this.value)"></td>
                     <td><input type="number" class="penale-input" value="${p.penale}" onchange="zmenPenale(${i}, this.value)"></td>
-                    <td style="color:#ff9800; font-weight:bold;">${celkovy}</td>
-                    <td style="color:#4caf50; font-weight:bold; font-size:14px;">${p.bodySpolu} <br><small style="color:#aaa; font-weight:normal;">(Trasa: ${p.bodyOtocaky}b | Čas: ${p.bodyCas}b)</small></td>
+                    <td style="color:#ff9800; font-weight:bold;">${p.bodyCas}</td>
+                    <td style="background:#222; color:#4caf50; font-weight:bold; font-size:15px;">${p.bodySpolu}</td>
                 </tr>`;
             });
             html += `</table>`;
