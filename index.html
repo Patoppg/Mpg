@@ -5,61 +5,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MPG Multi-Task Organizer</title>
     
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
         body { font-family: sans-serif; background: #1e1e1e; color: #fff; padding: 10px; margin: 0; }
-        .card { background: #2d2d2d; padding: 12px; border-radius: 8px; margin-bottom: 10px; }
+        .card { background: #2d2d2d; padding: 12px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         h2, h3 { margin: 0 0 10px 0; }
         .input-text { width: 100%; padding: 10px; box-sizing: border-box; border-radius: 5px; border: 1px solid #444; background: #1e1e1e; color: white; margin-bottom: 10px; font-size: 16px; }
         .btn-group { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-        .btn { flex: 1; border: none; padding: 10px; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; min-width: 100px; }
-        .btn-save { background: #4caf50; } .btn-print { background: #e91e63; } .btn-kml { background: #ff9800; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; }
+        .btn { flex: 1; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; min-width: 100px; font-size: 14px; text-align: center; text-decoration: none; }
+        .btn-save { background: #4caf50; } .btn-kml { background: #ff9800; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-print { background: #e91e63; }
         
-        #map { width: 100%; height: 500px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; }
+        /* Pevne definovaný kontajner pre mapu eliminujúci sivé plochy */
+        #map { width: 100%; height: 450px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; display: block; }
         
-        /* ČISTÝ TLAČOVÝ REŽIM BEZ BIELEJ MAPY */
-        @media print {
-            @page { size: landscape; margin: 0; }
-            body { background: white; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
-            
-            body * { visibility: hidden; }
-            
-            body:not(.print-board) #map, body:not(.print-board) #map * { visibility: visible; }
-            body:not(.print-board) #map { 
-                position: absolute; left: 0; top: 0; 
-                width: 100vw !important; height: 100vh !important; 
-                border: none !important; border-radius: 0 !important; 
-            }
-            body:not(.print-board) .leaflet-control-zoom { display: none !important; }
-
-            body.print-board #leaderboard-box, body.print-board #leaderboard-box * { visibility: visible; }
-            body.print-board #leaderboard-box { position: absolute; left: 0; top: 0; width: 100%; }
-            
-            table { color: black; border-collapse: collapse; width: 100%; font-size: 12px; }
-            th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
-            th { background: #eee !important; }
-            input { border: none; background: transparent; color: black; font-weight: bold; }
-        }
-
-        .track-list { list-style: none; padding: 0; display: flex; gap: 5px; flex-wrap: wrap; }
-        .track-item { background: #444; padding: 5px 10px; border-radius: 4px; cursor: pointer; border: 1px solid #555; }
+        .track-list { list-style: none; padding: 0; display: flex; gap: 5px; flex-wrap: wrap; margin: 0 0 10px 0; }
+        .track-item { background: #444; padding: 6px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #555; font-size: 14px; }
         .btn-del-single { background: #f44336; color: white; border: none; padding: 2px 6px; border-radius: 4px; margin-left: 10px; cursor: pointer; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th, td { border: 1px solid #555; padding: 8px; text-align: center; }
+        th { background: #333; }
+        .penale-input, .dekl-input { padding: 4px; background: #1e1e1e; color: white; border: 1px solid #666; text-align: center; border-radius: 3px; font-size: 14px; }
+        .penale-input { width: 50px; } .dekl-input { width: 70px; }
+        
+        /* Čistá tlač výsledkovej listiny bez zásahu do mapy */
+        @media print {
+            @page { size: portrait; margin: 10mm; }
+            body { background: white; color: black; padding: 0; margin: 0; }
+            .card:not(#leaderboard-box), #map, h2, h3 { display: none !important; }
+            #leaderboard-box { background: transparent; box-shadow: none; padding: 0; display: block !important; }
+            table { color: black; width: 100%; font-size: 12px; }
+            th, td { border: 1px solid #000; padding: 6px; }
+            th { background: #eee !important; -webkit-print-color-adjust: exact; }
+            .dekl-input, .penale-input { border: none; background: transparent; color: black; font-weight: bold; }
+            .btn-group { display: none !important; }
+        }
     </style>
 </head>
 <body>
+
     <div class="card">
         <h2>🧭 MPG Multi-Task Organizer</h2>
         <input type="text" id="task-name-input" class="input-text" value="Task 1">
         <div class="btn-group">
             <button class="btn btn-save" onclick="ulozitTratDoPamate()">Uložiť trať 💾</button>
-            <button class="btn btn-print" onclick="window.print()">Tlačiť mapu 🖼️</button>
             <button class="btn btn-kml" onclick="exportovatDoKML()">Stiahnuť KML 🛰️</button>
             <button class="btn btn-qr" onclick="zobrazitQR()">QR Kód 📱</button>
             <button class="btn btn-reset" onclick="vynulovatTrat()">Vyčistiť 🔄</button>
@@ -69,47 +61,39 @@
     </div>
 
     <div class="card">
-        <h3 style="color:#ff9800; display:none; text-align:center;" id="status-kreslenia">✏️ Klikni na mape, kde má brána KONČIŤ!</h3>
-        <div id="zoznam-bodov" style="font-size: 14px;"><em style="color:#aaa;">Klikaj do mapy! ("Štart"/"Cieľ" = Brána)</em></div>
+        <h3 style="color:#ff9800; display:none; text-align:center;" id="status-kreslenia">✏️ REŽIM BRÁNY: Klikni na mape, kde má brána KONČIŤ!</h3>
+        <div id="zoznam-bodov" style="font-size: 14px;"><em style="color:#aaa;">Klikaj do mapy pre pridanie bodov. ("START" alebo "CIEL" vytvorí bránu)</em></div>
     </div>
 
-    <div class="card" style="padding:0; border:none;">
+    <div class="card" style="padding:0; border:none; margin-bottom: 10px;">
         <div id="map"></div>
     </div>
 
     <div class="card">
-        <h3>📥 Nahrávanie letov</h3>
+        <h3>📥 Nahrávanie letov (IGC)</h3>
         <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center; flex-wrap:wrap;">
-            <label>Pretekárov:</label>
-            <input type="number" id="pocet-pretekarov" value="0" min="0" style="width:60px; padding:5px; border-radius:4px; border:1px solid #555; background:#222; color:white; text-align:center;" onchange="vyhodnotStatus()">
-            <span id="upload-status" style="color:#aaa; font-size:14px; font-weight:bold;">Nenahraté žiadne lety</span>
+            <label>Počet pretekárov:</label>
+            <input type="number" id="pocet-pretekarov" value="0" min="0" style="width:60px; padding:6px; border-radius:4px; border:1px solid #555; background:#222; color:white; text-align:center;" onchange="vyhodnotStatus()">
+            <span id="upload-status" style="color:#aaa; font-size:14px; font-weight:bold;">Žiadne načítané lety</span>
         </div>
-        <label for="igc-input" style="display:block; background:#e67e22; padding:12px; border-radius:5px; text-align:center; cursor:pointer; font-weight:bold;">📂 VYBRAŤ A NAHRAŤ IGC SÚBORY</label>
+        <label for="igc-input" style="display:block; background:#e67e22; padding:12px; border-radius:5px; text-align:center; cursor:pointer; font-weight:bold; color:white;">📂 VYBRAŤ IGC SÚBORY</label>
         <input type="file" id="igc-input" accept=".igc" multiple style="display:none;">
     </div>
 
     <div class="card" id="leaderboard-box" style="display:none; overflow-x:auto;">
-        <h3>🏆 Výsledky</h3>
-        <div class="btn-group">
-            <button class="btn" style="background:#00bcd4;" onclick="exportovatDoCSV()">Stiahnuť CSV 📊</button>
-            <button class="btn btn-print" onclick="tlacitVysledky()">Tlačiť výsledky 🖨️</button>
+        <h3>🏆 Výsledková listina</h3>
+        <div class="btn-group" style="margin-bottom: 10px;">
+            <button class="btn btn-csv" onclick="exportovatDoCSV()">Stiahnuť CSV 📊</button>
+            <button class="btn btn-print" onclick="window.print()">Tlačiť výsledky 🖨️</button>
         </div>
         <div id="leaderboard-table-container"></div>
     </div>
 
     <script>
-        // ZABIJAK STARÝCH VERZIÍ - Tento kód vyčistí mobily používateľov od starého kódu
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                for(let registration of registrations) {
-                    registration.unregister();
-                }
-            });
-        }
-
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
         let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
         
+        // CSS inline ikona pre spoľahlivé zobrazenie bez externých obrázkov
         const bodIcon = L.divIcon({
             className: 'custom-icon',
             html: "<div style='background:#e91e63; width:14px; height:14px; border-radius:50%; border:2px solid white; box-shadow:0 0 3px black;'></div>",
@@ -117,10 +101,11 @@
         });
 
         function inicializujMapu() {
-            map = L.map('map').setView([48.46, 17.39], 10);
+            // Predvolené zameranie na Boleráz
+            map = L.map('map').setView([48.461, 17.518], 11);
             
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
-                maxZoom: 19, detectRetina: true 
+                maxZoom: 19 
             }).addTo(map);
             
             L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
@@ -128,8 +113,9 @@
             nacitatVsetkyTrateZPamate();
             map.on('click', mapClickAction);
             
-            setTimeout(() => { if(map) map.invalidateSize(); }, 500);
-            setTimeout(() => { if(map) map.invalidateSize(); }, 1500);
+            // Poistky pre správne prekreslenie rozmerov mapy na mobilných zariadeniach
+            setTimeout(() => { if(map) map.invalidateSize(); }, 400);
+            window.addEventListener('resize', () => { if(map) map.invalidateSize(); });
         }
 
         function mapClickAction(e) {
@@ -171,30 +157,30 @@
             });
             
             let html = '<ul style="list-style:none; padding:0; margin:0;">'; 
-            mojeOtocneBody.forEach((b, i) => { html += `<li style="margin-bottom:5px;"><strong>${i+1}. ${b.nazov}</strong> <button class="btn-del-single" onclick="zmazatBod(${i})">X</button></li>`; });
+            mojeOtocneBody.forEach((b, i) => { html += `<li style="margin-bottom:5px;"><strong>${i+1}. ${b.nazov}</strong> (${b.typ === 'gate' ? 'Brána' : b.rozmer + 'm'}) <button class="btn-del-single" onclick="zmazatBod(${i})">X</button></li>`; });
             document.getElementById('zoznam-bodov').innerHTML = html + '</ul>';
             
-            if (bodyPreZoom.length > 0) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [30, 30] });
+            if (bodyPreZoom.length > 0 && map) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [40, 40] });
             vykresliLeaderboard();
         }
 
         window.zmazatBod = function(i) { mojeOtocneBody.splice(i, 1); prekresliVsetkyBody(); }
         
-        function ulozitTratDoPamate() { const meno = document.getElementById('task-name-input').value; if(!meno) return; vsetkyTrate[meno] = mojeOtocneBody; localStorage.setItem('mpg_trate_final', JSON.stringify(vsetkyTrate)); vykresliZoznamUlozenychTrati(); }
-        function nacitatVsetkyTrateZPamate() { const d = localStorage.getItem('mpg_trate_final'); if (d) { vsetkyTrate = JSON.parse(d); vykresliZoznamUlozenychTrati(); } }
+        function ulozitTratDoPamate() { const meno = document.getElementById('task-name-input').value; if(!meno) return; vsetkyTrate[meno] = mojeOtocneBody; localStorage.setItem('mpg_trate_data', JSON.stringify(vsetkyTrate)); vykresliZoznamUlozenychTrati(); }
+        function nacitatVsetkyTrateZPamate() { const d = localStorage.getItem('mpg_trate_data'); if (d) { vsetkyTrate = JSON.parse(d); vykresliZoznamUlozenychTrati(); } }
         function vykresliZoznamUlozenychTrati() { const ul = document.getElementById('ulozene-trate-list'); ul.innerHTML = ""; Object.keys(vsetkyTrate).forEach(m => { const li = document.createElement('li'); li.className = 'track-item'; li.innerText = m; li.onclick = () => { mojeOtocneBody = vsetkyTrate[m]; prekresliVsetkyBody(); }; ul.appendChild(li); }); }
         function vynulovatTrat() { mojeOtocneBody = []; prekresliVsetkyBody(); document.getElementById('qrcode-container').style.display="none"; }
         
         function zobrazitQR() { 
             const qrBox = document.getElementById('qrcode-container'); 
-            qrBox.innerHTML = "<h4 style='color:black; margin:0 0 10px 0;'>Naskenuj pre body</h4>"; 
+            qrBox.innerHTML = "<h4 style='color:black; margin:0 0 10px 0;'>Naskenovať otočné body</h4>"; 
             const minified = mojeOtocneBody.map(b => `${b.nazov}|${b.lat.toFixed(5)}|${b.lon.toFixed(5)}`).join(';'); 
             new QRCode(qrBox, { text: minified, width: 200, height: 200 }); 
             qrBox.style.display = "block"; 
         }
 
         function exportovatDoKML() {
-            if (mojeOtocneBody.length === 0) return alert("Nemáš žiadne body!");
+            if (mojeOtocneBody.length === 0) return alert("Zoznam bodov je prázdny!");
             let kml = '<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>';
             mojeOtocneBody.forEach(b => { kml += `<Placemark><name>${b.nazov}</name><Point><coordinates>${b.lon},${b.lat},0</coordinates></Point></Placemark>`; });
             kml += '</Document></kml>';
@@ -233,99 +219,4 @@
                     if(preleteny) { preletenePoradie++; casyPreletov.push(secPreletu); }
                 });
 
-                let casBase = (casyPreletov.length >= 2) ? Math.max(...casyPreletov) - Math.min(...casyPreletov) : 0;
-                vysledkyPiloti.push({ meno: menoPilota, splnene: preletenePoradie, casBase: casBase, penale: 0, maCas: (casyPreletov.length >= 2), deklarovanyText: "", deklarovanySec: 0 });
-            });
-            
-            vyhodnotStatus();
-            if(flightPolylines.length > 0) map.fitBounds(flightPolylines[0].getBounds());
-            vykresliLeaderboard();
-        });
-
-        window.vyhodnotStatus = function() {
-            const pocetCakanych = parseInt(document.getElementById('pocet-pretekarov').value) || 0;
-            const pocetNahratych = vysledkyPiloti.length;
-            const statusEl = document.getElementById('upload-status');
-            
-            if (pocetCakanych > 0) {
-                if (pocetNahratych === pocetCakanych) { statusEl.innerHTML = `✅ Všetky lety nahraté (${pocetNahratych}/${pocetCakanych})`; statusEl.style.color = '#4caf50'; } 
-                else if (pocetNahratych < pocetCakanych) { statusEl.innerHTML = `⚠️ Chýbajú lety (${pocetNahratych}/${pocetCakanych})`; statusEl.style.color = '#ff9800'; }
-                else { statusEl.innerHTML = `❓ Viac letov ako pretekárov (${pocetNahratych}/${pocetCakanych})`; statusEl.style.color = '#e91e63'; }
-            } else { statusEl.innerHTML = `✅ Nahraté: ${pocetNahratych}`; statusEl.style.color = '#4caf50'; }
-        }
-
-        function vypocitajBodyZCasu(realnyCas, deklarovanyCas) {
-            if (!deklarovanyCas || deklarovanyCas <= 0) return 0;
-            let diff = Math.abs(realnyCas - deklarovanyCas);
-            let strateneBody = Math.round(diff / 60); 
-            let body = 15 - strateneBody;
-            return body > 0 ? body : 0;
-        }
-
-        window.zmenDeklarovany = function(index, text) {
-            vysledkyPiloti[index].deklarovanyText = text;
-            let parts = text.split(':');
-            let sec = (parts.length === 2) ? (parseInt(parts[0]) * 60 + parseInt(parts[1])) : parseInt(text) * 60;
-            vysledkyPiloti[index].deklarovanySec = isNaN(sec) ? 0 : sec;
-            vykresliLeaderboard();
-        }
-
-        window.zmenPenale = function(index, val) { vysledkyPiloti[index].penale = parseInt(val) || 0; vykresliLeaderboard(); }
-
-        function vykresliLeaderboard() {
-            if(vysledkyPiloti.length === 0) return;
-            document.getElementById('leaderboard-box').style.display = "block";
-            
-            vysledkyPiloti.forEach(p => {
-                let realnyCas = p.maCas ? (p.casBase + p.penale) : 0;
-                p.bodyCas = p.maCas ? vypocitajBodyZCasu(realnyCas, p.deklarovanySec) : 0;
-                p.bodyOtocaky = p.splnene * 2; 
-                p.bodySpolu = p.bodyOtocaky + p.bodyCas;
-            });
-
-            vysledkyPiloti.sort((a, b) => {
-                if (b.bodySpolu !== a.bodySpolu) return b.bodySpolu - a.bodySpolu;
-                const casA = a.maCas ? (a.casBase + a.penale) : Infinity;
-                const casB = b.maCas ? (b.casBase + b.penale) : Infinity;
-                return casA - casB;
-            });
-
-            let html = `<table><tr>
-                <th>#</th><th>Pilot</th><th>Otočáky</th><th>Čas</th>
-                <th>Deklar.<br>(mm:ss)</th><th>Penále(s)</th><th>Finál</th><th style="color:#4caf50;">BODY</th>
-            </tr>`;
-            
-            vysledkyPiloti.forEach((p, i) => {
-                let celkovy = p.maCas ? formatCas(p.casBase + p.penale) : "Nedokončil";
-                let casL = p.maCas ? formatCas(p.casBase) : "-";
-                html += `<tr>
-                    <td>${i+1}</td><td><b>${p.meno}</b></td>
-                    <td>${p.splnene}/${mojeOtocneBody.length} <br><small>(+${p.bodyOtocaky}b)</small></td>
-                    <td>${casL}</td>
-                    <td><input type="text" style="width:50px; text-align:center;" value="${p.deklarovanyText}" onchange="zmenDeklarovany(${i}, this.value)"></td>
-                    <td><input type="number" style="width:40px; text-align:center;" value="${p.penale}" onchange="zmenPenale(${i}, this.value)"></td>
-                    <td style="color:#ff9800;">${celkovy}</td>
-                    <td style="color:#4caf50; font-weight:bold; font-size:14px;">${p.bodySpolu}</td>
-                </tr>`;
-            });
-            html += `</table>`;
-            document.getElementById('leaderboard-table-container').innerHTML = html;
-        }
-        
-        window.tlacitVysledky = function() {
-            document.body.classList.add('print-board');
-            window.print();
-            document.body.classList.remove('print-board');
-        }
-
-        window.exportovatDoCSV = function() {
-            let csv = "\uFEFFPoradie;Pilot;Pocet otocakov;Body za otocaky;Cisty cas (s);Deklarovany (s);Penalizacia (s);Body za cas;CELKOVE BODY\n";
-            vysledkyPiloti.forEach((p, i) => { csv += `${i+1};${p.meno};${p.splnene};${p.bodyOtocaky};${p.casBase};${p.deklarovanySec};${p.penale};${p.bodyCas};${p.bodySpolu}\n`; });
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob); a.download = "Vysledky.csv"; a.click();
-        }
-
-        inicializujMapu();
-    </script>
-</body>
-</html>
+                let casBase = (casyPreletov.length
