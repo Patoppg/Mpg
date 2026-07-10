@@ -51,7 +51,7 @@
 <body>
 
     <div class="card">
-        <h2>🧭 Score Hunter Organizer <small style="font-size:12px; color:#8bc34a; font-weight:normal;">v2.0</small></h2>
+        <h2>🧭 MPG Organizer <small style="font-size:12px; color:#8bc34a; font-weight:normal;">v2.2</small></h2>
         <input type="text" id="task-name-input" class="input-text" value="Task 1">
         <div class="btn-group">
             <button class="btn btn-save" onclick="ulozitTratDoPamate()">Uložiť trať 💾</button>
@@ -118,7 +118,6 @@
         function inicializujMapu() {
             try {
                 map = L.map('map').setView([48.461, 17.518], 11);
-                // Vrateny povodny fungujuci kod pre nacitanie mapy
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, crossOrigin: true }).addTo(map);
                 L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
                 nacitatVsetkyTrateZPamate();
@@ -129,64 +128,30 @@
             }
         }
 
+        // SPOĽAHLIVÝ EXPORT: Odfotí presne to, čo vidíš na displeji bez menenia veľkosti
         window.stiahnutMapu = function() {
             if (mojeOtocneBody.length === 0) return alert("Najprv pridaj body na mapu!");
             
-            let chceCeluTrat = confirm("Chceš stiahnuť celú trať s MAXIMÁLNYMI detailmi (profi kvalita na A4)?\n\n[OK] = Áno, vygeneruj veľkú detailnú mapu\n[Zrušiť] = Nie, stiahni len tento malý výrez, ktorý vidím");
-
             const mapDiv = document.getElementById('map');
-            const originalWidth = mapDiv.style.width || "100%";
-            const originalHeight = mapDiv.style.height || "500px";
             const uiControls = document.querySelector('.leaflet-control-container');
             
+            // Schováme ovládacie prvky (plus/mínus) pred fotením
             if(uiControls) uiControls.style.display = 'none';
 
-            let loadingEl = document.createElement('div');
-            loadingEl.innerHTML = "<h2 style='color:white; text-align:center; padding-top:40%; font-family:sans-serif;'>Generujem profi mapu...<br><small style='color:#ccc; font-weight:normal;'>Prebieha sťahovanie najmenších detailov trate z družice.<br>Môže to trvať 2-3 sekundy, prosím čakaj.</small></h2>";
-            loadingEl.style.position = "fixed"; loadingEl.style.top = "0"; loadingEl.style.left = "0"; loadingEl.style.width = "100%"; loadingEl.style.height = "100%"; loadingEl.style.background = "rgba(0,0,0,0.85)"; loadingEl.style.zIndex = "9999";
-            document.body.appendChild(loadingEl);
-
-            if (chceCeluTrat) {
-                mapDiv.style.width = "1200px";
-                mapDiv.style.height = "1700px";
-                map.invalidateSize();
-                
-                let bodyPreZoom = [];
-                mojeOtocneBody.forEach(b => {
-                    if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]], [b.p2[0], b.p2[1]]); } else { bodyPreZoom.push([b.lat, b.lon]); }
-                });
-                if (bodyPreZoom.length > 0) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [60, 60] });
-            }
-
+            // Počkáme pol sekundy a odfotíme aktuálny stav mapy
             setTimeout(() => {
                 html2canvas(mapDiv, { useCORS: true, allowTaint: false, scale: 2 }).then(canvas => {
                     let link = document.createElement('a'); 
-                    link.download = chceCeluTrat ? 'MPG_Mapa_A4_Profi.jpg' : 'MPG_Mapa_Vyrez.jpg'; 
+                    link.download = 'MPG_Mapa.jpg'; 
                     link.href = canvas.toDataURL('image/jpeg', 0.9); 
                     link.click();
                     
-                    mapDiv.style.width = originalWidth;
-                    mapDiv.style.height = originalHeight;
-                    map.invalidateSize();
                     if(uiControls) uiControls.style.display = 'block';
-                    document.body.removeChild(loadingEl);
-                    
-                    if (chceCeluTrat) {
-                        let bodyPreZoom = [];
-                        mojeOtocneBody.forEach(b => {
-                            if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]], [b.p2[0], b.p2[1]]); } else { bodyPreZoom.push([b.lat, b.lon]); }
-                        });
-                        if (bodyPreZoom.length > 0) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [30, 30] });
-                    }
                 }).catch(err => { 
                     alert("Chyba pri generovaní: " + err); 
-                    mapDiv.style.width = originalWidth;
-                    mapDiv.style.height = originalHeight;
-                    map.invalidateSize();
                     if(uiControls) uiControls.style.display = 'block'; 
-                    document.body.removeChild(loadingEl);
                 });
-            }, 2500); 
+            }, 500); 
         }
 
         function mapClickAction(e) {
@@ -269,7 +234,7 @@
             let spojitCiara = confirm("Chceš, aby boli otočné body na mape pospájané čiarou v poradí, v akom si ich zadal?\n\n[OK] = Áno, vytvoriť trasu\n[Zrušiť] = Nie, iba samostatné body");
             
             let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
-            gpx += '<gpx version="1.1" creator="ScoreHunter" xmlns="http://www.topografix.com/GPX/1/1">\n';
+            gpx += '<gpx version="1.1" creator="MPG Organizer" xmlns="http://www.topografix.com/GPX/1/1">\n';
             
             mojeOtocneBody.forEach((b, i) => { 
                 let bezpecnyNazov = b.nazov.replace(/"/g, '').replace(/'/g, '');
@@ -291,7 +256,7 @@
             const blob = new Blob([gpx], { type: 'application/gpx+xml;charset=utf-8' }); 
             const a = document.createElement('a'); 
             a.href = URL.createObjectURL(blob); 
-            a.download = "ScoreHunter_Trasa.gpx"; 
+            a.download = "MPG_Trasa.gpx"; 
             a.click();
         }
 
