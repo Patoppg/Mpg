@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://rawcdn.githack.com/rowanwins/leaflet-easyPrint/gh-pages/dist/bundle.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <style>
         body { font-family: sans-serif; background: #1e1e1e; color: #fff; padding: 10px; margin: 0; }
@@ -19,7 +19,7 @@
         .btn { flex: 1; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; min-width: 100px; font-size: 14px; text-align: center; }
         .btn-save { background: #4caf50; } .btn-gpx { background: #008CBA; } .btn-import-gpx { background: #8bc34a; color: white; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e91e63; } .btn-print-table { background: #ff9800; }
         
-        #map { width: 100%; height: 500px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; display: block; position: relative; z-index: 1; }
+        #map { width: 100%; height: 500px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; display: block; position: relative; z-index: 1; overflow: hidden; }
         
         .track-list { list-style: none; padding: 0; display: flex; gap: 5px; flex-wrap: wrap; margin: 0 0 10px 0; }
         .track-item { background: #444; padding: 6px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #555; font-size: 14px; }
@@ -100,7 +100,6 @@
     <script>
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
         let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
-        let printer = null; // Premenna pre tlac mapy
         
         const farbyPiloti = [
             '#FF1493', '#00FFFF', '#FF4500', '#00FF00', '#FFD700', 
@@ -119,8 +118,120 @@
         function inicializujMapu() {
             try {
                 map = L.map('map').setView([48.461, 17.518], 11);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, crossOrigin: true }).addTo(map);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, crossOrigin: 'anonymous' }).addTo(map);
                 L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
                 nacitatVsetkyTrateZPamate();
                 map.on('click', mapClickAction);
-                setTimeout(() => { if(
+                setTimeout(() => { if(map) map.invalidateSize(); }, 500);
+            } catch (error) {
+                console.error("Chyba pri inicializácii mapy:", error);
+            }
+        }
+
+        // VYLEPSENÝ SYSTÉM PRE DETAILNÚ TLAČ MAPY (BEZ EXTERNÝCH KNIŽNÍC)
+        window.stiahnutMapu = function() {
+            if (mojeOtocneBody.length === 0) return alert("Najprv pridaj body na mapu!");
+            
+            let chceCeluTrat = confirm("Chceš stiahnuť celú trať s MAXIMÁLNYMI detailmi (profi kvalita na A4)?\n\n[OK] = Áno, vygeneruj veľkú detailnú mapu\n[Zrušiť] = Nie, stiahni len tento malý výrez, ktorý vidím");
+
+            const mapDiv = document.getElementById('map');
+            const originalWidth = mapDiv.style.width || "100%";
+            const originalHeight = mapDiv.style.height || "500px";
+            const uiControls = document.querySelector('.leaflet-control-container');
+            
+            if(uiControls) uiControls.style.display = 'none';
+
+            // Načítavacia obrazovka, kým sa ťahajú detaily
+            let loadingEl = document.createElement('div');
+            loadingEl.innerHTML = "<h2 style='color:white; text-align:center; padding-top:40%; font-family:sans-serif;'>Generujem profi mapu...<br><small style='color:#ccc; font-weight:normal;'>Prebieha sťahovanie najmenších detailov trate z družice.<br>Môže to trvať 2-3 sekundy, prosím čakaj.</small></h2>";
+            loadingEl.style.position = "fixed"; loadingEl.style.top = "0"; loadingEl.style.left = "0"; loadingEl.style.width = "100%"; loadingEl.style.height = "100%"; loadingEl.style.background = "rgba(0,0,0,0.85)"; loadingEl.style.zIndex = "9999";
+            document.body.appendChild(loadingEl);
+
+            if (chceCeluTrat) {
+                // Trik: Fyzicky zväčšíme mapu, aby bola donútená stiahnuť brutálne detaily
+                mapDiv.style.width = "1200px";
+                mapDiv.style.height = "1700px";
+                map.invalidateSize();
+                
+                let bodyPreZoom = [];
+                mojeOtocneBody.forEach(b => {
+                    if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]], [b.p2[0], b.p2[1]]); } else { bodyPreZoom.push([b.lat, b.lon]); }
+                });
+                if (bodyPreZoom.length > 0) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [60, 60] });
+            }
+
+            // Počkáme 2.5 sekundy, kým OpenStreetMap dodá všetky detailné "obrázky"
+            setTimeout(() => {
+                html2canvas(mapDiv, { useCORS: true, allowTaint: false, scale: 2 }).then(canvas => {
+                    let link = document.createElement('a'); 
+                    link.download = chceCeluTrat ? 'MPG_Mapa_A4_Profi.jpg' : 'MPG_Mapa_Vyrez.jpg'; 
+                    link.href = canvas.toDataURL('image/jpeg', 0.9); 
+                    link.click();
+                    
+                    // Upratovanie: Vrátime mapu späť do pôvodného, normálneho stavu
+                    mapDiv.style.width = originalWidth;
+                    mapDiv.style.height = originalHeight;
+                    map.invalidateSize();
+                    if(uiControls) uiControls.style.display = 'block';
+                    document.body.removeChild(loadingEl);
+                    
+                    if (chceCeluTrat) {
+                        let bodyPreZoom = [];
+                        mojeOtocneBody.forEach(b => {
+                            if (b.typ === "gate") { bodyPreZoom.push([b.p1[0], b.p1[1]], [b.p2[0], b.p2[1]]); } else { bodyPreZoom.push([b.lat, b.lon]); }
+                        });
+                        if (bodyPreZoom.length > 0) map.fitBounds(L.latLngBounds(bodyPreZoom), { padding: [30, 30] });
+                    }
+                }).catch(err => { 
+                    alert("Chyba pri generovaní: " + err); 
+                    mapDiv.style.width = originalWidth;
+                    mapDiv.style.height = originalHeight;
+                    map.invalidateSize();
+                    if(uiControls) uiControls.style.display = 'block'; 
+                    document.body.removeChild(loadingEl);
+                });
+            }, 2500); 
+        }
+
+        function mapClickAction(e) {
+            const lat = e.latlng.lat; const lon = e.latlng.lng;
+            if (rezimKresleniaBrany) {
+                if (docasnyMarker) map.removeLayer(docasnyMarker);
+                document.getElementById('status-kreslenia').style.display = "none"; rezimKresleniaBrany = false;
+                mojeOtocneBody.push({  nazov: docasnyNazovBrany, typ: "gate", lat: (prvyBodBrany.lat + lat) / 2, lon: (prvyBodBrany.lon + lon) / 2, p1: [prvyBodBrany.lat, prvyBodBrany.lon], p2: [lat, lon] });
+                prekresliVsetkyBody(); return;
+            }
+            const cisloBodov = mojeOtocneBody.length + 1; let pNazov = cisloBodov === 1 ? "START" : "Otocak " + cisloBodov;
+            const nazov = prompt("Názov bodu:", pNazov); if (!nazov) return; const nazovUpper = nazov.toUpperCase();
+            if (nazovUpper === "START" || nazovUpper === "CIEL") {
+                rezimKresleniaBrany = true; docasnyNazovBrany = nazovUpper; prvyBodBrany = { lat: lat, lon: lon };
+                docasnyMarker = L.marker([lat, lon], {icon: bodIcon}).addTo(map);
+                document.getElementById('status-kreslenia').style.display = "block";
+            } else {
+                const radius = parseInt(prompt("Polomer valca (m):", "100")) || 100;
+                mojeOtocneBody.push({ nazov: nazovUpper, lat: lat, lon: lon, typ: "cylinder", rozmer: radius });
+                prekresliVsetkyBody();
+            }
+        }
+
+        function prekresliVsetkyBody() {
+            mapMarkers.forEach(m => map.removeLayer(m)); mapVisuals.forEach(v => map.removeLayer(v));
+            mapMarkers = []; mapVisuals = [];
+            
+            mojeOtocneBody.forEach((b, i) => {
+                const marker = L.marker([b.lat, b.lon], {icon: bodIcon}).addTo(map).bindPopup(`<b>${b.nazov}</b>`);
+                mapMarkers.push(marker);
+                if (b.typ === "gate") { 
+                    mapVisuals.push(L.polyline([b.p1, b.p2], { color: '#ff9800', weight: 5 }).addTo(map)); 
+                } else { 
+                    mapVisuals.push(L.circle([b.lat, b.lon], { color: 'red', fillColor: '#f03', fillOpacity: 0.15, radius: b.rozmer }).addTo(map)); 
+                }
+            });
+            
+            let html = '<ul style="list-style:none; padding:0; margin:0;">'; 
+            mojeOtocneBody.forEach((b, i) => { html += `<li style="margin-bottom:5px;"><strong>${i+1}. ${b.nazov}</strong> (${b.typ === 'gate' ? 'Brána' : b.rozmer + 'm'}) <button class="btn-del-single" onclick="zmazatBod(${i})">X</button></li>`; });
+            document.getElementById('zoznam-bodov').innerHTML = html + '</ul>';
+            vykresliLeaderboard();
+        }
+
+        window.zmazatBod = function(i) { mojeOtocneBody.splice(i, 1); prekresliV
