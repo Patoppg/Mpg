@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-browser-print/1.0.6/leaflet.browser.print.min.js"></script>
 
     <style>
         body { font-family: sans-serif; background: #1e1e1e; color: #fff; padding: 10px; margin: 0; }
@@ -17,7 +17,7 @@
         .input-text { width: 100%; padding: 10px; box-sizing: border-box; border-radius: 5px; border: 1px solid #444; background: #1e1e1e; color: white; margin-bottom: 10px; font-size: 16px; }
         .btn-group { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
         .btn { flex: 1; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; min-width: 100px; font-size: 14px; text-align: center; }
-        .btn-save { background: #4caf50; } .btn-gpx { background: #008CBA; } .btn-import-gpx { background: #8bc34a; color: white; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e91e63; } .btn-print-table { background: #ff9800; }
+        .btn-save { background: #4caf50; } .btn-gpx { background: #008CBA; } .btn-import-gpx { background: #8bc34a; color: white; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-print-table { background: #ff9800; }
         
         #map { width: 100%; height: 500px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; display: block; position: relative; z-index: 1; overflow: hidden; }
         
@@ -33,34 +33,27 @@
         .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; border: 1px solid #fff; vertical-align: middle; }
 
         @media print {
+            /* Povolíme tlačiarni vidieť len tú mapu a vyčistíme okolie */
             body { background: white; color: black; margin: 0; padding: 0; }
-            body > div.card:not(#leaderboard-box) { display: none !important; }
+            .card > h2, .card > input, .btn-group, .track-list, #qrcode-container, #status-kreslenia, #zoznam-bodov, #igc-input, label { display: none !important; }
+            .card { box-shadow: none; border: none; padding: 0; margin: 0; }
             #leaderboard-box { background: transparent; padding: 0; margin: 0; box-shadow: none; display: block !important; }
-            #leaderboard-box h3 { color: black !important; font-size: 18px; margin-bottom: 15px; }
-            .btn-group, button { display: none !important; }
             table { width: 100%; border-collapse: collapse; font-size: 11px; color: black; }
             th, td { border: 1px solid #000; padding: 5px; text-align: center; }
             th { background: #eee !important; -webkit-print-color-adjust: exact; color: black !important; font-weight: bold; }
-            td { background: transparent !important; color: black !important; }
-            .dekl-input, .penale-input, .name-input { border: none; background: transparent; color: black; font-weight: bold; width: 100%; padding: 0; text-align: center; }
-            .name-input { text-align: left; }
-            .color-dot { display: none !important; }
         }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h2>🧭 MPG Organizer <small style="font-size:12px; color:#8bc34a; font-weight:normal;">v2.2</small></h2>
+        <h2>🧭 MPG Organizer <small style="font-size:12px; color:#8bc34a; font-weight:normal;">v3.0 (Profi Print)</small></h2>
         <input type="text" id="task-name-input" class="input-text" value="Task 1">
         <div class="btn-group">
             <button class="btn btn-save" onclick="ulozitTratDoPamate()">Uložiť trať 💾</button>
-            <button class="btn btn-download" onclick="stiahnutMapu()">Stiahnuť Mapu 🖼️</button>
             <button class="btn btn-gpx" onclick="exportovatDoGPX()">Stiahnuť GPX 🗺️</button>
-            
             <button class="btn btn-import-gpx" onclick="document.getElementById('gpx-import-input').click()">Načítať GPX 📂</button>
             <input type="file" id="gpx-import-input" accept=".gpx" style="display:none;" onchange="importovatGPX(event)">
-            
             <button class="btn btn-qr" onclick="zobrazitQR()">QR Kód 📱</button>
             <button class="btn btn-reset" onclick="vynulovatTrat()">Vyčistiť 🔄</button>
         </div>
@@ -70,7 +63,7 @@
 
     <div class="card">
         <h3 style="color:#ff9800; display:none; text-align:center;" id="status-kreslenia">✏️ REŽIM BRÁNY: Klikni na mape, kde má brána KONČIŤ!</h3>
-        <div id="zoznam-bodov" style="font-size: 14px;"><em style="color:#aaa;">Klikaj do mapy pre pridanie bodov. ("START" alebo "CIEL" vytvorí bránu)</em></div>
+        <div id="zoznam-bodov" style="font-size: 14px;"><em style="color:#aaa;">Klikaj do mapy pre pridanie bodov. (Tlačidlo na TLAČ mapy do A4 je priamo na mape vľavo hore!)</em></div>
     </div>
 
     <div class="card" style="padding:0; border:none; margin-bottom: 10px;">
@@ -120,38 +113,25 @@
                 map = L.map('map').setView([48.461, 17.518], 11);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, crossOrigin: true }).addTo(map);
                 L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+
+                // PROFESIONÁLNY TLAČOVÝ MODUL (Zošije detaily do PDF)
+                L.browserPrint({
+                    title: 'Vytlačiť profi mapu',
+                    documentTitle: 'MPG_Trasa_Boleraz',
+                    printModes: [
+                        L.BrowserPrint.Mode.Landscape("A4", {title: "A4 na šírku"}),
+                        L.BrowserPrint.Mode.Portrait("A4", {title: "A4 na výšku"}),
+                        L.BrowserPrint.Mode.Custom("A3", {title: "A3 Mega Detail"})
+                    ],
+                    manualMode: false
+                }).addTo(map);
+
                 nacitatVsetkyTrateZPamate();
                 map.on('click', mapClickAction);
                 setTimeout(() => { if(map) map.invalidateSize(); }, 500);
             } catch (error) {
                 console.error("Chyba pri inicializácii mapy:", error);
             }
-        }
-
-        // SPOĽAHLIVÝ EXPORT: Odfotí presne to, čo vidíš na displeji bez menenia veľkosti
-        window.stiahnutMapu = function() {
-            if (mojeOtocneBody.length === 0) return alert("Najprv pridaj body na mapu!");
-            
-            const mapDiv = document.getElementById('map');
-            const uiControls = document.querySelector('.leaflet-control-container');
-            
-            // Schováme ovládacie prvky (plus/mínus) pred fotením
-            if(uiControls) uiControls.style.display = 'none';
-
-            // Počkáme pol sekundy a odfotíme aktuálny stav mapy
-            setTimeout(() => {
-                html2canvas(mapDiv, { useCORS: true, allowTaint: false, scale: 2 }).then(canvas => {
-                    let link = document.createElement('a'); 
-                    link.download = 'MPG_Mapa.jpg'; 
-                    link.href = canvas.toDataURL('image/jpeg', 0.9); 
-                    link.click();
-                    
-                    if(uiControls) uiControls.style.display = 'block';
-                }).catch(err => { 
-                    alert("Chyba pri generovaní: " + err); 
-                    if(uiControls) uiControls.style.display = 'block'; 
-                });
-            }, 500); 
         }
 
         function mapClickAction(e) {
