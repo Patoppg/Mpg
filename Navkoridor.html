@@ -62,7 +62,7 @@
 <body>
 
     <div class="card">
-        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v1.7 (Manuál brány, Mierka, Vzdialenosť)</small></h2>
+        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v1.8 (Čisté priehľadné body)</small></h2>
         <input type="text" id="task-name-input" class="input-text" value="Koridor Let 1">
         
         <div class="setting-box">
@@ -183,7 +183,6 @@
 
             const mapDiv = document.getElementById('map');
             
-            // Schováme iba ZOOM tlačidlá, MIERKA (scale) ostáva viditeľná!
             const zoomControls = document.querySelectorAll('.leaflet-control-zoom');
             zoomControls.forEach(el => el.style.display = 'none');
 
@@ -224,13 +223,11 @@
             }, 3000); 
         }
 
-        // MANUÁLNE KRESLENIE BRÁNY JE SPÄŤ
         function mapClickAction(e) {
             const lat = e.latlng.lat; const lon = e.latlng.lng;
             if (rezimKresleniaBrany) {
                 if (docasnyMarker) map.removeLayer(docasnyMarker);
                 document.getElementById('status-kreslenia').style.display = "none"; rezimKresleniaBrany = false;
-                // Uložíme stred brány pre koridor a P1, P2 pre vykreslenie čiary brány
                 mojeOtocneBody.push({ nazov: docasnyNazovBrany, typ: "gate", lat: (prvyBodBrany.lat + lat) / 2, lon: (prvyBodBrany.lon + lon) / 2, p1: [prvyBodBrany.lat, prvyBodBrany.lon], p2: [lat, lon] });
                 prekresliVsetkyBody(); return;
             }
@@ -251,10 +248,8 @@
             mapMarkers = []; mapVisuals = [];
             let sirka = getSirka(); let centerLinePoints = [];
             
-            // 1. Zber stredových bodov
             mojeOtocneBody.forEach((b, i) => { centerLinePoints.push([b.lat, b.lon]); });
             
-            // 2. Výpočet celkovej vzdialenosti trate
             let totalDist = 0;
             if(centerLinePoints.length > 1) {
                 for(let i = 0; i < centerLinePoints.length - 1; i++) {
@@ -269,7 +264,6 @@
                 statBox.style.display = 'none';
             }
 
-            // 3. Vykreslenie Brán, Bodov a Zameriavačov
             mojeOtocneBody.forEach((b, i) => {
                 const marker = L.marker([b.lat, b.lon], {icon: bodIcon}).addTo(map).bindPopup(`<b>${b.nazov}</b>`);
                 mapMarkers.push(marker);
@@ -278,12 +272,12 @@
                     mapVisuals.push(L.polyline([b.p1, b.p2], { color: 'black', weight: 8 }).addTo(map));
                     mapVisuals.push(L.polyline([b.p1, b.p2], { color: '#ff9800', weight: 4 }).addTo(map)); 
                 } else { 
-                    mapVisuals.push(L.circle([b.lat, b.lon], { color: 'black', weight: 6, fillColor: 'transparent', opacity: 0.9, radius: sirka }).addTo(map));
-                    mapVisuals.push(L.circle([b.lat, b.lon], { color: '#FFFF00', weight: 4, dashArray: '10, 15', fillColor: 'transparent', opacity: 1, radius: sirka }).addTo(map)); 
+                    // OPRAVA: Pridané fill: false, aby vnútro kruhov nebolo čierne!
+                    mapVisuals.push(L.circle([b.lat, b.lon], { color: 'black', weight: 6, fill: false, fillOpacity: 0, opacity: 0.9, radius: sirka }).addTo(map));
+                    mapVisuals.push(L.circle([b.lat, b.lon], { color: '#FFFF00', weight: 4, dashArray: '10, 15', fill: false, fillOpacity: 0, opacity: 1, radius: sirka }).addTo(map)); 
                 }
             });
             
-            // 4. Vykreslenie ochranných mantinelov (čiarovaný koridor)
             if (centerLinePoints.length > 1) {
                 mapVisuals.push(L.polyline(centerLinePoints, { color: 'black', weight: 6 }).addTo(map));
                 mapVisuals.push(L.polyline(centerLinePoints, { color: '#e94560', weight: 4 }).addTo(map));
@@ -542,6 +536,7 @@
             a.href = URL.createObjectURL(blob); a.download = "Vysledky_Koridor.csv"; a.click();
         }
 
+        // Spustenie mapy hneď ako sa načíta DOM, s poistkou
         document.addEventListener("DOMContentLoaded", inicializujMapu);
         setTimeout(inicializujMapu, 400);
     </script>
