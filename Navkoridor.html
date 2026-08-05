@@ -56,7 +56,7 @@
 <body>
 
     <div class="card">
-        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v1.1</small></h2>
+        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v1.2 (A4 HD + Profi Vizuál)</small></h2>
         <input type="text" id="task-name-input" class="input-text" value="Koridor Let 1">
         
         <div class="setting-box">
@@ -66,7 +66,7 @@
 
         <div class="btn-group">
             <button class="btn btn-save" onclick="ulozitTratDoPamate()">Uložiť trať 💾</button>
-            <button class="btn btn-download" onclick="stiahnutMapu()">Stiahnuť Mapu 🖼️</button>
+            <button class="btn btn-download" id="btn-download" onclick="stiahnutMapu()">Stiahnuť HD A4 Mapu 🖼️</button>
             <button class="btn btn-gpx" onclick="exportovatDoGPX()">Stiahnuť GPX 🗺️</button>
             
             <button class="btn btn-import-gpx" onclick="document.getElementById('gpx-import-input').click()">Načítať GPX 📂</button>
@@ -142,20 +142,58 @@
             } catch (error) { console.error("Chyba mapy:", error); }
         }
 
+        // --- NOVA FUNKCIA PRE A4 HD TLAC ---
         window.stiahnutMapu = function() {
             if (mojeOtocneBody.length === 0) return alert("Najprv pridaj body na mapu!");
+            
+            const btn = document.getElementById('btn-download');
+            const staryText = btn.innerHTML;
+            btn.innerHTML = "⏳ Generujem A4 HD mapu...";
+            btn.style.background = "#ff9800";
+
             const mapDiv = document.getElementById('map');
             const uiControls = document.querySelector('.leaflet-control-container');
             if(uiControls) uiControls.style.display = 'none';
+
+            // Zaloha povodnych rozmerov
+            const oW = mapDiv.style.width, oH = mapDiv.style.height, oPos = mapDiv.style.position, oZ = mapDiv.style.zIndex, oT = mapDiv.style.top, oL = mapDiv.style.left;
+            
+            // "Nafuknutie" do obrovskeho rozlisenia pre A4
+            mapDiv.style.width = '1754px'; 
+            mapDiv.style.height = '1240px';
+            mapDiv.style.position = 'absolute';
+            mapDiv.style.top = '0';
+            mapDiv.style.left = '0';
+            mapDiv.style.zIndex = '9999';
+
+            map.invalidateSize();
+            let bounds = L.latLngBounds(mojeOtocneBody.map(b => [b.lat, b.lon]));
+            map.fitBounds(bounds, { padding: [100, 100] });
+
+            // Pockame 2 sekundy, kym Leaflet stiahne detaily a odfotime
             setTimeout(() => {
                 html2canvas(mapDiv, { useCORS: true, allowTaint: false, scale: 2 }).then(canvas => {
                     let link = document.createElement('a'); 
-                    link.download = 'Navigacny_Koridor.jpg'; 
+                    link.download = 'Mpg_Koridor_A4.jpg'; 
                     link.href = canvas.toDataURL('image/jpeg', 0.9); 
                     link.click();
+                    
+                    // Obnova povodnej mapy na mobile
+                    mapDiv.style.width = oW; mapDiv.style.height = oH; mapDiv.style.position = oPos; mapDiv.style.zIndex = oZ; mapDiv.style.top = oT; mapDiv.style.left = oL;
+                    map.invalidateSize();
+                    map.fitBounds(bounds, { padding: [20, 20] });
                     if(uiControls) uiControls.style.display = 'block';
-                }).catch(err => { if(uiControls) uiControls.style.display = 'block'; });
-            }, 500); 
+                    btn.innerHTML = staryText;
+                    btn.style.background = "#e94560";
+                }).catch(err => { 
+                    mapDiv.style.width = oW; mapDiv.style.height = oH; mapDiv.style.position = oPos; mapDiv.style.zIndex = oZ; mapDiv.style.top = oT; mapDiv.style.left = oL;
+                    map.invalidateSize();
+                    if(uiControls) uiControls.style.display = 'block'; 
+                    btn.innerHTML = staryText;
+                    btn.style.background = "#e94560";
+                    alert("Chyba pri generovaní mapy.");
+                });
+            }, 2000); 
         }
 
         function mapClickAction(e) {
@@ -188,18 +226,22 @@
                 mapMarkers.push(marker); centerLinePoints.push([b.lat, b.lon]);
 
                 if (b.typ === "gate") { 
-                    mapVisuals.push(L.polyline([b.p1, b.p2], { color: '#ff9800', weight: 5 }).addTo(map)); 
+                    // Brány s čiernym obrysom pre kontrast
+                    mapVisuals.push(L.polyline([b.p1, b.p2], { color: 'black', weight: 7 }).addTo(map));
+                    mapVisuals.push(L.polyline([b.p1, b.p2], { color: '#ff9800', weight: 4 }).addTo(map)); 
                 } else { 
-                    // Prerusovany kruh pre zaoblenie rohov koridoru
-                    mapVisuals.push(L.circle([b.lat, b.lon], { color: 'white', weight: 2, dashArray: '6, 12', fillColor: 'transparent', opacity: 0.8, radius: sirka }).addTo(map)); 
+                    // Zlomy okrajov koridoru s čiernym obrysom a výraznou žltou
+                    mapVisuals.push(L.circle([b.lat, b.lon], { color: 'black', weight: 6, fillColor: 'transparent', opacity: 0.9, radius: sirka }).addTo(map));
+                    mapVisuals.push(L.circle([b.lat, b.lon], { color: '#FFFF00', weight: 4, dashArray: '10, 15', fillColor: 'transparent', opacity: 1, radius: sirka }).addTo(map)); 
                 }
             });
             
             if (centerLinePoints.length > 1) {
-                // HLAVNA ZMENA: Pevna stredova ciara (bez dashArray)
+                // Hlavná línia (čierna pod, červená na vrch)
+                mapVisuals.push(L.polyline(centerLinePoints, { color: 'black', weight: 6 }).addTo(map));
                 mapVisuals.push(L.polyline(centerLinePoints, { color: '#e94560', weight: 4 }).addTo(map));
                 
-                // Vykreslenie prerusovanych rovnobeziek pre okraje koridoru
+                // Vykreslenie bočných ochranných okrajov
                 for(let i = 0; i < centerLinePoints.length - 1; i++) {
                     let p1 = centerLinePoints[i];
                     let p2 = centerLinePoints[i+1];
@@ -221,8 +263,12 @@
                         let right1 = [p1[0] - oLat, p1[1] - oLon];
                         let right2 = [p2[0] - oLat, p2[1] - oLon];
                         
-                        mapVisuals.push(L.polyline([left1, left2], { color: 'white', weight: 2, dashArray: '6, 12', opacity: 0.8 }).addTo(map));
-                        mapVisuals.push(L.polyline([right1, right2], { color: 'white', weight: 2, dashArray: '6, 12', opacity: 0.8 }).addTo(map));
+                        // OBRYSOVÝ KONTRAST (Hrubá čierna podložka + Žiarivá žltá vrchná čiara)
+                        mapVisuals.push(L.polyline([left1, left2], { color: 'black', weight: 6, opacity: 0.9 }).addTo(map));
+                        mapVisuals.push(L.polyline([right1, right2], { color: 'black', weight: 6, opacity: 0.9 }).addTo(map));
+                        
+                        mapVisuals.push(L.polyline([left1, left2], { color: '#FFFF00', weight: 4, dashArray: '10, 15', opacity: 1 }).addTo(map));
+                        mapVisuals.push(L.polyline([right1, right2], { color: '#FFFF00', weight: 4, dashArray: '10, 15', opacity: 1 }).addTo(map));
                     }
                 }
             }
