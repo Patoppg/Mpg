@@ -19,7 +19,7 @@
         .setting-box input { width: 70px; padding: 5px; text-align: center; font-weight: bold; background: #1a1a2e; color: white; border: 1px solid #555; border-radius: 4px; }
         .btn-group { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
         .btn { flex: 1; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; min-width: 100px; font-size: 14px; text-align: center; }
-        .btn-save { background: #4caf50; } .btn-sat { background: #3f51b5; } .btn-gpx { background: #008CBA; } .btn-import-gpx { background: #8bc34a; color: white; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e94560; } .btn-print-table { background: #ff9800; }
+        .btn-save { background: #4caf50; } .btn-maptype { background: #3f51b5; } .btn-gpx { background: #008CBA; } .btn-import-gpx { background: #8bc34a; color: white; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e94560; } .btn-print-table { background: #ff9800; }
         
         #map { width: 100%; height: 500px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; display: block; position: relative; z-index: 1; overflow: hidden; }
         
@@ -56,7 +56,7 @@
 <body>
 
     <div class="card">
-        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v1.3 (Satelit + Ultra HD)</small></h2>
+        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v1.4 (Podrobná Topo Mapa)</small></h2>
         <input type="text" id="task-name-input" class="input-text" value="Koridor Let 1">
         
         <div class="setting-box">
@@ -65,7 +65,7 @@
         </div>
 
         <div class="btn-group">
-            <button class="btn btn-sat" onclick="prepniMapu()">Satelit / Mapa 🌍</button>
+            <button class="btn btn-maptype" onclick="prepniMapu()">Zmeniť mapu 🗺️</button>
             <button class="btn btn-save" onclick="ulozitTratDoPamate()">Uložiť trať 💾</button>
             <button class="btn btn-download" id="btn-download" onclick="stiahnutMapu()">HD A4 Tlač 🖼️</button>
             <button class="btn btn-gpx" onclick="exportovatDoGPX()">Stiahnuť GPX 🗺️</button>
@@ -113,7 +113,7 @@
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
         let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
         
-        let osmLayer, satLayer;
+        let osmLayer, topoLayer;
         let aktualnyRezimMapy = 'osm';
 
         const farbyPiloti = [
@@ -140,7 +140,8 @@
                 map = L.map('map').setView([48.461, 17.518], 11);
                 
                 osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, crossOrigin: 'anonymous' });
-                satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, crossOrigin: 'anonymous' });
+                // OpenTopoMap poskytuje bohatšie topografické detaily, vrstevnice a cesty
+                topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, crossOrigin: 'anonymous' });
                 
                 osmLayer.addTo(map);
                 L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
@@ -154,10 +155,10 @@
         window.prepniMapu = function() {
             if (aktualnyRezimMapy === 'osm') {
                 map.removeLayer(osmLayer);
-                satLayer.addTo(map);
-                aktualnyRezimMapy = 'sat';
+                topoLayer.addTo(map);
+                aktualnyRezimMapy = 'topo';
             } else {
-                map.removeLayer(satLayer);
+                map.removeLayer(topoLayer);
                 osmLayer.addTo(map);
                 aktualnyRezimMapy = 'osm';
             }
@@ -177,7 +178,6 @@
 
             const oW = mapDiv.style.width, oH = mapDiv.style.height, oPos = mapDiv.style.position, oZ = mapDiv.style.zIndex, oT = mapDiv.style.top, oL = mapDiv.style.left;
             
-            // Extrémne natiahnutie mapy prinúti systém stiahnuť viac detailov (300 DPI A4)
             mapDiv.style.width = '3508px'; 
             mapDiv.style.height = '2480px';
             mapDiv.style.position = 'absolute';
@@ -516,7 +516,6 @@
             a.href = URL.createObjectURL(blob); a.download = "Vysledky_Koridor.csv"; a.click();
         }
 
-        // Spustenie mapy hneď ako sa načíta DOM, s poistkou
         document.addEventListener("DOMContentLoaded", inicializujMapu);
         setTimeout(inicializujMapu, 400);
     </script>
