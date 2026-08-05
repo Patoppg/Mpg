@@ -22,10 +22,11 @@
         
         .btn-group { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
         .btn { flex: 1; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; min-width: 100px; font-size: 14px; text-align: center; }
-        .btn-save { background: #4caf50; } .btn-maptype { background: #3f51b5; } .btn-gpx { background: #008CBA; } .btn-import-gpx { background: #8bc34a; color: white; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e94560; } .btn-print-table { background: #ff9800; }
+        .btn-save { background: #4caf50; } .btn-maptype { background: #3f51b5; } .btn-racer { background: #9c27b0; } .btn-gpx { background: #008CBA; } .btn-import-gpx { background: #8bc34a; color: white; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e94560; } .btn-print-table { background: #ff9800; }
         
         #map { width: 100%; height: 500px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; display: block; position: relative; z-index: 1; overflow: hidden; }
         
+        /* Obrovská a jasná mierka pre tlač na A4 */
         .leaflet-control-scale-line { background: rgba(255, 255, 255, 0.95) !important; border: 3px solid #000 !important; color: #000 !important; font-weight: bold !important; font-size: 18px !important; padding: 4px 8px !important; box-shadow: 0 0 5px rgba(0,0,0,0.5) !important; line-height: 1.2 !important; }
 
         .track-list { list-style: none; padding: 0; display: flex; gap: 5px; flex-wrap: wrap; margin: 0 0 10px 0; }
@@ -61,7 +62,7 @@
 <body>
 
     <div class="card">
-        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v2.1 (Fix mapového posunu)</small></h2>
+        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v2.2 (Režim Pretekára + Topo)</small></h2>
         <input type="text" id="task-name-input" class="input-text" value="Koridor Let 1">
         
         <div class="setting-box">
@@ -72,6 +73,7 @@
         <div id="track-stats">🏁 Celková dĺžka trate: <b>0.00 km</b> <small>(0 m)</small></div>
 
         <div class="btn-group">
+            <button class="btn btn-racer" onclick="prepniRezimPretekara()">Pretekár (Skryť čiary) 👁️</button>
             <button class="btn btn-maptype" onclick="prepniMapu()">Zmeniť mapu 🗺️</button>
             <button class="btn btn-save" onclick="ulozitTratDoPamate()">Uložiť trať 💾</button>
             <button class="btn btn-download" id="btn-download" onclick="stiahnutMapu()">HD A4 Tlač 🖼️</button>
@@ -120,7 +122,8 @@
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
         let vysledkyPiloti = []; let map = null;
         let osmLayer, topoLayer;
-        let aktualnyRezimMapy = 'osm';
+        let aktualnyRezimMapy = 'topo'; // TOPO MAPA JE TERAZ PREDVOLENA
+        let rezimPretekara = false; // Nastavenie pre zobrazenie/skrytie čiar
         
         let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null;
 
@@ -144,7 +147,8 @@
                 osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, crossOrigin: 'anonymous' });
                 topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, crossOrigin: 'anonymous' });
                 
-                osmLayer.addTo(map);
+                // Hneď pri štarte zapíname TOPO mapu (tú s detailami)
+                topoLayer.addTo(map);
                 L.control.scale({ imperial: false, position: 'bottomleft', maxWidth: 300 }).addTo(map);
                 
                 nacitatVsetkyTrateZPamate();
@@ -165,13 +169,26 @@
             }
         }
 
-        // OPRAVENÁ FUNKCIA NA SŤAHOVANIE MAPY
+        // Tlačidlo na vypnutie/zapnutie čiar koridoru
+        window.prepniRezimPretekara = function() {
+            rezimPretekara = !rezimPretekara;
+            let btn = document.querySelector('.btn-racer');
+            if (rezimPretekara) {
+                btn.innerHTML = "Organizátor (Ukázať čiary) 👁️";
+                btn.style.background = "#ff9800";
+            } else {
+                btn.innerHTML = "Pretekár (Skryť čiary) 👁️";
+                btn.style.background = "#9c27b0";
+            }
+            prekresliVsetkyBody();
+        }
+
         window.stiahnutMapu = function() {
             if (mojeOtocneBody.length === 0) return alert("Najprv pridaj body na mapu!");
             
             const btn = document.getElementById('btn-download');
             const staryText = btn.innerHTML;
-            btn.innerHTML = "⏳ Generujem fotku (Fixované)...";
+            btn.innerHTML = "⏳ Generujem fotku...";
             btn.style.background = "#ff9800";
 
             const mapDiv = document.getElementById('map');
@@ -179,15 +196,13 @@
             const zoomControls = document.querySelectorAll('.leaflet-control-zoom');
             zoomControls.forEach(el => el.style.display = 'none');
 
-            // Vycentrujeme mapu tak, aby bolo vidieť celú trať, no nemeníme CSS veľkosť okna!
             let bounds = L.latLngBounds(mojeOtocneBody.map(b => [b.lat, b.lon]));
             map.fitBounds(bounds, { padding: [50, 50] });
 
             setTimeout(() => {
-                // scale: 4 zabezpečí obrovskú 4K kvalitu fotky bez toho, aby to rozbilo pozície čiar
                 html2canvas(mapDiv, { useCORS: true, allowTaint: false, scale: 4 }).then(canvas => {
                     let link = document.createElement('a'); 
-                    link.download = 'Mpg_Koridor_Ostra.jpg'; 
+                    link.download = 'Mpg_Mapa_Na_Tlac.jpg'; 
                     link.href = canvas.toDataURL('image/jpeg', 0.9); 
                     link.click();
                     
@@ -248,23 +263,29 @@
                 statBox.style.display = 'none';
             }
 
+            // Vykresľovanie bodov a čiar
             mojeOtocneBody.forEach((b, i) => {
+                // Priehľadné zameriavače sa ukážu VŽDY (pre organizátora aj pretekára)
                 let outer = L.circleMarker([b.lat, b.lon], { radius: 14, color: '#e94560', weight: 4, fill: false }).addTo(map).bindPopup(`<b>${b.nazov}</b>`);
                 let inner = L.circleMarker([b.lat, b.lon], { radius: 4, color: 'black', weight: 1, fillColor: '#FFFF00', fillOpacity: 1 }).addTo(map);
-                
                 mapMarkers.push(outer);
                 mapMarkers.push(inner);
 
+                // Brány - ukážeme ich vždy, aby pilot na mape videl cieľovú/štartovú lajnu
                 if (b.typ === "gate" && b.p1 && b.p2) { 
                     mapVisuals.push(L.polyline([b.p1, b.p2], { color: 'black', weight: 8 }).addTo(map));
                     mapVisuals.push(L.polyline([b.p1, b.p2], { color: '#ff9800', weight: 4 }).addTo(map)); 
                 } else { 
-                    mapVisuals.push(L.circle([b.lat, b.lon], { color: 'black', weight: 6, fill: false, radius: sirka }).addTo(map));
-                    mapVisuals.push(L.circle([b.lat, b.lon], { color: '#FFFF00', weight: 4, dashArray: '10, 15', fill: false, radius: sirka }).addTo(map)); 
+                    // Tieto zakrútené rohy koridoru ukážeme LEN AK NIE SME v režime pretekára
+                    if (!rezimPretekara) {
+                        mapVisuals.push(L.circle([b.lat, b.lon], { color: 'black', weight: 6, fill: false, radius: sirka }).addTo(map));
+                        mapVisuals.push(L.circle([b.lat, b.lon], { color: '#FFFF00', weight: 4, dashArray: '10, 15', fill: false, radius: sirka }).addTo(map)); 
+                    }
                 }
             });
             
-            if (centerLinePoints.length > 1) {
+            // Vykreslenie koridorov a spojníc (LEN pre organizátora)
+            if (centerLinePoints.length > 1 && !rezimPretekara) {
                 mapVisuals.push(L.polyline(centerLinePoints, { color: 'black', weight: 6 }).addTo(map));
                 mapVisuals.push(L.polyline(centerLinePoints, { color: '#e94560', weight: 4 }).addTo(map));
                 
