@@ -15,8 +15,8 @@
         .card { background: #16213e; padding: 12px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.4); border: 1px solid #0f3460; }
         h2, h3 { margin: 0 0 10px 0; color: #e94560; }
         .input-text { width: 100%; padding: 10px; box-sizing: border-box; border-radius: 5px; border: 1px solid #0f3460; background: #0f3460; color: white; margin-bottom: 10px; font-size: 16px; }
-        .setting-box { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; background: #0f3460; padding: 10px; border-radius: 5px; }
-        .setting-box input { width: 70px; padding: 5px; text-align: center; font-weight: bold; }
+        .setting-box { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; background: #0f3460; padding: 10px; border-radius: 5px; flex-wrap: wrap; }
+        .setting-box input { width: 70px; padding: 5px; text-align: center; font-weight: bold; background: #1a1a2e; color: white; border: 1px solid #555; border-radius: 4px; }
         .btn-group { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
         .btn { flex: 1; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; min-width: 100px; font-size: 14px; text-align: center; }
         .btn-save { background: #4caf50; } .btn-gpx { background: #008CBA; } .btn-import-gpx { background: #8bc34a; color: white; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e94560; } .btn-print-table { background: #ff9800; }
@@ -56,13 +56,12 @@
 <body>
 
     <div class="card">
-        <h2>✈️ Navigačný Koridor</h2>
+        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v1.1</small></h2>
         <input type="text" id="task-name-input" class="input-text" value="Koridor Let 1">
         
         <div class="setting-box">
-            <label>Šírka koridoru (m) na každú stranu od osi:</label>
+            <label>Šírka koridoru (m) na každú stranu:</label>
             <input type="number" id="sirka-koridoru" value="100" min="10" onchange="prekresliVsetkyBody()">
-            <small style="color:#aaa;">(celkový tunel bude 2x tak široký)</small>
         </div>
 
         <div class="btn-group">
@@ -127,7 +126,10 @@
         function getSirka() { return parseInt(document.getElementById('sirka-koridoru').value) || 100; }
 
         function inicializujMapu() {
-            if (typeof L === 'undefined') return alert("Chyba: Knižnica mapy sa nenatiahla.");
+            if (typeof L === 'undefined') {
+                setTimeout(inicializujMapu, 300);
+                return;
+            }
             if (map !== null) return; 
             
             try {
@@ -136,8 +138,8 @@
                 L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
                 nacitatVsetkyTrateZPamate();
                 map.on('click', mapClickAction);
-                setTimeout(() => { if(map) map.invalidateSize(); }, 500);
-            } catch (error) { console.error(error); }
+                setTimeout(() => { if(map) map.invalidateSize(); }, 300);
+            } catch (error) { console.error("Chyba mapy:", error); }
         }
 
         window.stiahnutMapu = function() {
@@ -165,7 +167,7 @@
                 prekresliVsetkyBody(); return;
             }
             const cisloBodov = mojeOtocneBody.length + 1; let pNazov = cisloBodov === 1 ? "START" : "Otocak " + cisloBodov;
-            const nazov = prompt("Názov bodu (Šírka koridoru je globálna):", pNazov); if (!nazov) return; const nazovUpper = nazov.toUpperCase();
+            const nazov = prompt("Názov bodu:", pNazov); if (!nazov) return; const nazovUpper = nazov.toUpperCase();
             if (nazovUpper === "START" || nazovUpper === "CIEL") {
                 rezimKresleniaBrany = true; docasnyNazovBrany = nazovUpper; prvyBodBrany = { lat: lat, lon: lon };
                 docasnyMarker = L.marker([lat, lon], {icon: bodIcon}).addTo(map);
@@ -188,12 +190,41 @@
                 if (b.typ === "gate") { 
                     mapVisuals.push(L.polyline([b.p1, b.p2], { color: '#ff9800', weight: 5 }).addTo(map)); 
                 } else { 
-                    mapVisuals.push(L.circle([b.lat, b.lon], { color: 'white', fillColor: 'transparent', opacity: 0.5, radius: sirka }).addTo(map)); 
+                    // Prerusovany kruh pre zaoblenie rohov koridoru
+                    mapVisuals.push(L.circle([b.lat, b.lon], { color: 'white', weight: 2, dashArray: '6, 12', fillColor: 'transparent', opacity: 0.8, radius: sirka }).addTo(map)); 
                 }
             });
             
             if (centerLinePoints.length > 1) {
-                mapVisuals.push(L.polyline(centerLinePoints, { color: '#e94560', weight: 4, dashArray: '10, 10' }).addTo(map));
+                // HLAVNA ZMENA: Pevna stredova ciara (bez dashArray)
+                mapVisuals.push(L.polyline(centerLinePoints, { color: '#e94560', weight: 4 }).addTo(map));
+                
+                // Vykreslenie prerusovanych rovnobeziek pre okraje koridoru
+                for(let i = 0; i < centerLinePoints.length - 1; i++) {
+                    let p1 = centerLinePoints[i];
+                    let p2 = centerLinePoints[i+1];
+                    
+                    let dx = (p2[1] - p1[1]) * 111320 * Math.cos(p1[0] * Math.PI / 180);
+                    let dy = (p2[0] - p1[0]) * 111320;
+                    let len = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if(len > 0) {
+                        let nx = -dy / len;
+                        let ny = dx / len;
+                        
+                        let oLat = ny * sirka / 111320;
+                        let oLon = nx * sirka / (111320 * Math.cos(p1[0] * Math.PI / 180));
+                        
+                        let left1 = [p1[0] + oLat, p1[1] + oLon];
+                        let left2 = [p2[0] + oLat, p2[1] + oLon];
+                        
+                        let right1 = [p1[0] - oLat, p1[1] - oLon];
+                        let right2 = [p2[0] - oLat, p2[1] - oLon];
+                        
+                        mapVisuals.push(L.polyline([left1, left2], { color: 'white', weight: 2, dashArray: '6, 12', opacity: 0.8 }).addTo(map));
+                        mapVisuals.push(L.polyline([right1, right2], { color: 'white', weight: 2, dashArray: '6, 12', opacity: 0.8 }).addTo(map));
+                    }
+                }
             }
 
             let html = '<ul style="list-style:none; padding:0; margin:0;">'; 
@@ -274,7 +305,6 @@
             reader.readAsText(file); e.target.value = ""; 
         }
 
-        // --- MATEMATIKA PRE KORIDOR ---
         const R = 6371000;
         function getDist(lat1, lon1, lat2, lon2) { const dLat=(lat2-lat1)*Math.PI/180; const dLon=(lon2-lon1)*Math.PI/180; const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2); return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
         function ciarySaPretinaju(A,B,C,D) { function ccw(p1,p2,p3){return(p3[0]-p1[0])*(p2[1]-p1[1])>(p2[0]-p1[0])*(p3[1]-p1[1]);} return(ccw(A,C,D)!==ccw(B,C,D))&&(ccw(A,B,C)!==ccw(A,B,D)); }
@@ -315,7 +345,6 @@
                 let pl = L.polyline(trackPoints.map(p => [p.lat, p.lon]), { color: farbaLetu, weight: 3, opacity: 0.8 }).addTo(map);
                 pl.bindPopup(`<b>Pilot: ${menoPilota}</b>`); flightPolylines.push(pl);
 
-                // Nájdenie Štartu a Cieľa
                 let idxStart = -1; let idxCiel = -1;
                 const startBod = mojeOtocneBody[0]; const cielBod = mojeOtocneBody[mojeOtocneBody.length-1];
                 
@@ -331,7 +360,6 @@
                 if (maCas) {
                     let activeTrack = trackPoints.slice(idxStart, idxCiel + 1);
                     
-                    // Detekcia 360 slučky (odstup min 15 sekúnd)
                     for(let i = 1; i < activeTrack.length; i++) {
                         for(let j = 1; j < i - 15; j++) {
                             if (ciarySaPretinaju([activeTrack[i-1].lat, activeTrack[i-1].lon], [activeTrack[i].lat, activeTrack[i].lon], [activeTrack[j-1].lat, activeTrack[j-1].lon], [activeTrack[j].lat, activeTrack[j].lon])) {
@@ -341,7 +369,6 @@
                         if (maSlucku) break;
                     }
 
-                    // Výpočet sekúnd mimo koridoru
                     for(let i = 1; i < activeTrack.length; i++) {
                         let pt = activeTrack[i]; let minDist = Infinity;
                         for (let k = 0; k < mojeOtocneBody.length - 1; k++) {
@@ -351,7 +378,6 @@
                         if (minDist > sirkaK) sekundyMimo += (pt.sekundy - activeTrack[i-1].sekundy);
                     }
 
-                    // Kontrola minutých zlomov (stredných bodov)
                     for (let k = 1; k < mojeOtocneBody.length - 1; k++) {
                         let trafil = false;
                         for(let i = 0; i < activeTrack.length; i++) {
@@ -432,8 +458,9 @@
             a.href = URL.createObjectURL(blob); a.download = "Vysledky_Koridor.csv"; a.click();
         }
 
+        // Spustenie mapy hneď ako sa načíta DOM, s poistkou
         document.addEventListener("DOMContentLoaded", inicializujMapu);
-        setTimeout(inicializujMapu, 500);
+        setTimeout(inicializujMapu, 400);
     </script>
 </body>
 </html>
