@@ -17,12 +17,18 @@
         .input-text { width: 100%; padding: 10px; box-sizing: border-box; border-radius: 5px; border: 1px solid #0f3460; background: #0f3460; color: white; margin-bottom: 10px; font-size: 16px; }
         .setting-box { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; background: #0f3460; padding: 10px; border-radius: 5px; flex-wrap: wrap; }
         .setting-box input { width: 70px; padding: 5px; text-align: center; font-weight: bold; background: #1a1a2e; color: white; border: 1px solid #555; border-radius: 4px; }
+        
+        #track-stats { display: none; background: #4caf50; padding: 12px; border-radius: 5px; text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 10px; border: 2px solid #388e3c; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+        
         .btn-group { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
         .btn { flex: 1; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; min-width: 100px; font-size: 14px; text-align: center; }
         .btn-save { background: #4caf50; } .btn-maptype { background: #3f51b5; } .btn-gpx { background: #008CBA; } .btn-import-gpx { background: #8bc34a; color: white; } .btn-qr { background: #673ab7; } .btn-reset { background: #555; } .btn-csv { background: #00bcd4; } .btn-download { background: #e94560; } .btn-print-table { background: #ff9800; }
         
         #map { width: 100%; height: 500px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; display: block; position: relative; z-index: 1; overflow: hidden; }
         
+        /* Obrovská a jasná mierka pre tlač na A4 */
+        .leaflet-control-scale-line { background: rgba(255, 255, 255, 0.95) !important; border: 3px solid #000 !important; color: #000 !important; font-weight: bold !important; font-size: 18px !important; padding: 4px 8px !important; box-shadow: 0 0 5px rgba(0,0,0,0.5) !important; line-height: 1.2 !important; }
+
         .track-list { list-style: none; padding: 0; display: flex; gap: 5px; flex-wrap: wrap; margin: 0 0 10px 0; }
         .track-item { background: #0f3460; padding: 6px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #e94560; font-size: 14px; }
         .btn-del-single { background: #e94560; color: white; border: none; padding: 2px 6px; border-radius: 4px; margin-left: 10px; cursor: pointer; }
@@ -56,13 +62,15 @@
 <body>
 
     <div class="card">
-        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v1.5 (Profi Zameriavače)</small></h2>
+        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v1.7 (Manuál brány, Mierka, Vzdialenosť)</small></h2>
         <input type="text" id="task-name-input" class="input-text" value="Koridor Let 1">
         
         <div class="setting-box">
             <label>Šírka koridoru (m) na každú stranu:</label>
             <input type="number" id="sirka-koridoru" value="100" min="10" onchange="prekresliVsetkyBody()">
         </div>
+
+        <div id="track-stats">🏁 Celková dĺžka trate: <b>0.00 km</b> <small>(0 m)</small></div>
 
         <div class="btn-group">
             <button class="btn btn-maptype" onclick="prepniMapu()">Zmeniť mapu 🗺️</button>
@@ -82,13 +90,13 @@
 
     <div class="card">
         <h3 style="color:#ff9800; display:none; text-align:center;" id="status-kreslenia">✏️ REŽIM BRÁNY: Klikni na mape, kde má brána KONČIŤ!</h3>
-        <div id="zoznam-bodov" style="font-size: 14px;"><em style="color:#aaa;">Klikaj do mapy pre pridanie bodov. ("START" alebo "CIEL" vytvorí bránu)</em></div>
+        <div id="zoznam-bodov" style="font-size: 14px;"><em style="color:#aaa;">Klikaj do mapy pre pridanie bodov. ("START" alebo "CIEL" zapne kreslenie brány)</em></div>
     </div>
 
     <div class="card" style="padding:0; border:none; margin-bottom: 10px;">
         <div id="map"></div>
     </div>
-
+    
     <div class="card">
         <h3>📥 Nahrávanie letov (IGC)</h3>
         <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center; flex-wrap:wrap;">
@@ -111,21 +119,22 @@
 
     <script>
         let mojeOtocneBody = []; let mapMarkers = []; let mapVisuals = []; let flightPolylines = []; let vsetkyTrate = {};
-        let vysledkyPiloti = []; let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null; let map = null;
-        
+        let vysledkyPiloti = []; let map = null;
         let osmLayer, topoLayer;
         let aktualnyRezimMapy = 'osm';
+        
+        let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null;
 
         const farbyPiloti = [
             '#00FFFF', '#FF1493', '#00FF00', '#FFD700', '#FF4500', 
             '#8A2BE2', '#FFFFFF', '#FF00FF', '#32CD32', '#00BFFF' 
         ];
 
-        // NOVE PRIEHLADNE LETECKE ZAMERIAVACE (TARGET MARKER)
+        // Priehľadný letecký zameriavač
         const bodIcon = L.divIcon({
             className: 'custom-icon',
-            html: "<div style='position:relative; width:30px; height:30px; border-radius:50%; border:3px solid #e94560; background: transparent; box-shadow: 0 0 5px black, inset 0 0 3px black; box-sizing: border-box;'><div style='position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:6px; height:6px; background:#FFFF00; border: 1px solid black; border-radius:50%;'></div></div>",
-            iconSize: [30, 30], iconAnchor: [15, 15]
+            html: "<div style='position:relative; width:34px; height:34px; border-radius:50%; border:4px solid #e94560; background: transparent; box-shadow: 0 0 4px black, inset 0 0 3px black; box-sizing: border-box;'><div style='position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:6px; height:6px; background:#FFFF00; border: 1px solid black; border-radius:50%; box-shadow: 0 0 2px black;'></div></div>",
+            iconSize: [34, 34], iconAnchor: [17, 17]
         });
 
         function getSirka() { return parseInt(document.getElementById('sirka-koridoru').value) || 100; }
@@ -144,7 +153,7 @@
                 topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, crossOrigin: 'anonymous' });
                 
                 osmLayer.addTo(map);
-                L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+                L.control.scale({ imperial: false, position: 'bottomleft', maxWidth: 300 }).addTo(map);
                 
                 nacitatVsetkyTrateZPamate();
                 map.on('click', mapClickAction);
@@ -173,8 +182,10 @@
             btn.style.background = "#ff9800";
 
             const mapDiv = document.getElementById('map');
-            const uiControls = document.querySelector('.leaflet-control-container');
-            if(uiControls) uiControls.style.display = 'none';
+            
+            // Schováme iba ZOOM tlačidlá, MIERKA (scale) ostáva viditeľná!
+            const zoomControls = document.querySelectorAll('.leaflet-control-zoom');
+            zoomControls.forEach(el => el.style.display = 'none');
 
             const oW = mapDiv.style.width, oH = mapDiv.style.height, oPos = mapDiv.style.position, oZ = mapDiv.style.zIndex, oT = mapDiv.style.top, oL = mapDiv.style.left;
             
@@ -199,13 +210,13 @@
                     mapDiv.style.width = oW; mapDiv.style.height = oH; mapDiv.style.position = oPos; mapDiv.style.zIndex = oZ; mapDiv.style.top = oT; mapDiv.style.left = oL;
                     map.invalidateSize();
                     map.fitBounds(bounds, { padding: [20, 20] });
-                    if(uiControls) uiControls.style.display = 'block';
+                    zoomControls.forEach(el => el.style.display = 'block');
                     btn.innerHTML = staryText;
                     btn.style.background = "#e94560";
                 }).catch(err => { 
                     mapDiv.style.width = oW; mapDiv.style.height = oH; mapDiv.style.position = oPos; mapDiv.style.zIndex = oZ; mapDiv.style.top = oT; mapDiv.style.left = oL;
                     map.invalidateSize();
-                    if(uiControls) uiControls.style.display = 'block'; 
+                    zoomControls.forEach(el => el.style.display = 'block');
                     btn.innerHTML = staryText;
                     btn.style.background = "#e94560";
                     alert("Chyba pri generovaní mapy.");
@@ -213,11 +224,13 @@
             }, 3000); 
         }
 
+        // MANUÁLNE KRESLENIE BRÁNY JE SPÄŤ
         function mapClickAction(e) {
             const lat = e.latlng.lat; const lon = e.latlng.lng;
             if (rezimKresleniaBrany) {
                 if (docasnyMarker) map.removeLayer(docasnyMarker);
                 document.getElementById('status-kreslenia').style.display = "none"; rezimKresleniaBrany = false;
+                // Uložíme stred brány pre koridor a P1, P2 pre vykreslenie čiary brány
                 mojeOtocneBody.push({ nazov: docasnyNazovBrany, typ: "gate", lat: (prvyBodBrany.lat + lat) / 2, lon: (prvyBodBrany.lon + lon) / 2, p1: [prvyBodBrany.lat, prvyBodBrany.lon], p2: [lat, lon] });
                 prekresliVsetkyBody(); return;
             }
@@ -238,12 +251,31 @@
             mapMarkers = []; mapVisuals = [];
             let sirka = getSirka(); let centerLinePoints = [];
             
+            // 1. Zber stredových bodov
+            mojeOtocneBody.forEach((b, i) => { centerLinePoints.push([b.lat, b.lon]); });
+            
+            // 2. Výpočet celkovej vzdialenosti trate
+            let totalDist = 0;
+            if(centerLinePoints.length > 1) {
+                for(let i = 0; i < centerLinePoints.length - 1; i++) {
+                    totalDist += getDist(centerLinePoints[i][0], centerLinePoints[i][1], centerLinePoints[i+1][0], centerLinePoints[i+1][1]);
+                }
+            }
+            const statBox = document.getElementById('track-stats');
+            if (totalDist > 0) {
+                statBox.style.display = 'block';
+                statBox.innerHTML = `🏁 Celková dĺžka trate: <b>${(totalDist/1000).toFixed(2)} km</b> <small>(${Math.round(totalDist)} m)</small>`;
+            } else {
+                statBox.style.display = 'none';
+            }
+
+            // 3. Vykreslenie Brán, Bodov a Zameriavačov
             mojeOtocneBody.forEach((b, i) => {
                 const marker = L.marker([b.lat, b.lon], {icon: bodIcon}).addTo(map).bindPopup(`<b>${b.nazov}</b>`);
-                mapMarkers.push(marker); centerLinePoints.push([b.lat, b.lon]);
+                mapMarkers.push(marker);
 
-                if (b.typ === "gate") { 
-                    mapVisuals.push(L.polyline([b.p1, b.p2], { color: 'black', weight: 7 }).addTo(map));
+                if (b.typ === "gate" && b.p1 && b.p2) { 
+                    mapVisuals.push(L.polyline([b.p1, b.p2], { color: 'black', weight: 8 }).addTo(map));
                     mapVisuals.push(L.polyline([b.p1, b.p2], { color: '#ff9800', weight: 4 }).addTo(map)); 
                 } else { 
                     mapVisuals.push(L.circle([b.lat, b.lon], { color: 'black', weight: 6, fillColor: 'transparent', opacity: 0.9, radius: sirka }).addTo(map));
@@ -251,6 +283,7 @@
                 }
             });
             
+            // 4. Vykreslenie ochranných mantinelov (čiarovaný koridor)
             if (centerLinePoints.length > 1) {
                 mapVisuals.push(L.polyline(centerLinePoints, { color: 'black', weight: 6 }).addTo(map));
                 mapVisuals.push(L.polyline(centerLinePoints, { color: '#e94560', weight: 4 }).addTo(map));
@@ -264,21 +297,14 @@
                     let len = Math.sqrt(dx*dx + dy*dy);
                     
                     if(len > 0) {
-                        let nx = -dy / len;
-                        let ny = dx / len;
+                        let nx = -dy / len; let ny = dx / len;
+                        let oLat = ny * sirka / 111320; let oLon = nx * sirka / (111320 * Math.cos(p1[0] * Math.PI / 180));
                         
-                        let oLat = ny * sirka / 111320;
-                        let oLon = nx * sirka / (111320 * Math.cos(p1[0] * Math.PI / 180));
-                        
-                        let left1 = [p1[0] + oLat, p1[1] + oLon];
-                        let left2 = [p2[0] + oLat, p2[1] + oLon];
-                        
-                        let right1 = [p1[0] - oLat, p1[1] - oLon];
-                        let right2 = [p2[0] - oLat, p2[1] - oLon];
+                        let left1 = [p1[0] + oLat, p1[1] + oLon]; let left2 = [p2[0] + oLat, p2[1] + oLon];
+                        let right1 = [p1[0] - oLat, p1[1] - oLon]; let right2 = [p2[0] - oLat, p2[1] - oLon];
                         
                         mapVisuals.push(L.polyline([left1, left2], { color: 'black', weight: 6, opacity: 0.9 }).addTo(map));
                         mapVisuals.push(L.polyline([right1, right2], { color: 'black', weight: 6, opacity: 0.9 }).addTo(map));
-                        
                         mapVisuals.push(L.polyline([left1, left2], { color: '#FFFF00', weight: 4, dashArray: '10, 15', opacity: 1 }).addTo(map));
                         mapVisuals.push(L.polyline([right1, right2], { color: '#FFFF00', weight: 4, dashArray: '10, 15', opacity: 1 }).addTo(map));
                     }
@@ -407,8 +433,8 @@
                 const startBod = mojeOtocneBody[0]; const cielBod = mojeOtocneBody[mojeOtocneBody.length-1];
                 
                 for (let i=1; i<trackPoints.length; i++) {
-                    if (idxStart === -1 && startBod.typ === "gate" && ciarySaPretinaju([trackPoints[i-1].lat, trackPoints[i-1].lon], [trackPoints[i].lat, trackPoints[i].lon], startBod.p1, startBod.p2)) idxStart = i;
-                    if (idxStart !== -1 && idxCiel === -1 && cielBod.typ === "gate" && ciarySaPretinaju([trackPoints[i-1].lat, trackPoints[i-1].lon], [trackPoints[i].lat, trackPoints[i].lon], cielBod.p1, cielBod.p2)) idxCiel = i;
+                    if (idxStart === -1 && startBod.typ === "gate" && startBod.p1 && startBod.p2 && ciarySaPretinaju([trackPoints[i-1].lat, trackPoints[i-1].lon], [trackPoints[i].lat, trackPoints[i].lon], startBod.p1, startBod.p2)) idxStart = i;
+                    if (idxStart !== -1 && idxCiel === -1 && cielBod.typ === "gate" && cielBod.p1 && cielBod.p2 && ciarySaPretinaju([trackPoints[i-1].lat, trackPoints[i-1].lon], [trackPoints[i].lat, trackPoints[i].lon], cielBod.p1, cielBod.p2)) idxCiel = i;
                 }
 
                 let maCas = (idxStart !== -1 && idxCiel !== -1 && idxCiel > idxStart);
@@ -516,7 +542,6 @@
             a.href = URL.createObjectURL(blob); a.download = "Vysledky_Koridor.csv"; a.click();
         }
 
-        // Spustenie mapy hneď ako sa načíta DOM, s poistkou
         document.addEventListener("DOMContentLoaded", inicializujMapu);
         setTimeout(inicializujMapu, 400);
     </script>
