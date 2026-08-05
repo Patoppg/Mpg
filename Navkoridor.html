@@ -56,7 +56,7 @@
 <body>
 
     <div class="card">
-        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v1.4 (Podrobná Topo Mapa)</small></h2>
+        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v1.5 (Profi Zameriavače)</small></h2>
         <input type="text" id="task-name-input" class="input-text" value="Koridor Let 1">
         
         <div class="setting-box">
@@ -121,10 +121,11 @@
             '#8A2BE2', '#FFFFFF', '#FF00FF', '#32CD32', '#00BFFF' 
         ];
 
+        // NOVE PRIEHLADNE LETECKE ZAMERIAVACE (TARGET MARKER)
         const bodIcon = L.divIcon({
             className: 'custom-icon',
-            html: "<div style='background:#e94560; width:14px; height:14px; border-radius:50%; border:2px solid white; box-shadow:0 0 3px black;'></div>",
-            iconSize: [18, 18], iconAnchor: [9, 9]
+            html: "<div style='position:relative; width:30px; height:30px; border-radius:50%; border:3px solid #e94560; background: transparent; box-shadow: 0 0 5px black, inset 0 0 3px black; box-sizing: border-box;'><div style='position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:6px; height:6px; background:#FFFF00; border: 1px solid black; border-radius:50%;'></div></div>",
+            iconSize: [30, 30], iconAnchor: [15, 15]
         });
 
         function getSirka() { return parseInt(document.getElementById('sirka-koridoru').value) || 100; }
@@ -140,7 +141,6 @@
                 map = L.map('map').setView([48.461, 17.518], 11);
                 
                 osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, crossOrigin: 'anonymous' });
-                // OpenTopoMap poskytuje bohatšie topografické detaily, vrstevnice a cesty
                 topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, crossOrigin: 'anonymous' });
                 
                 osmLayer.addTo(map);
@@ -516,6 +516,7 @@
             a.href = URL.createObjectURL(blob); a.download = "Vysledky_Koridor.csv"; a.click();
         }
 
+        // Spustenie mapy hneď ako sa načíta DOM, s poistkou
         document.addEventListener("DOMContentLoaded", inicializujMapu);
         setTimeout(inicializujMapu, 400);
     </script>
