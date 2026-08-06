@@ -26,7 +26,7 @@
         
         #map { width: 100%; height: 500px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; display: block; position: relative; z-index: 1; overflow: hidden; }
         
-        /* Mierka so zvislými čiarkami (rozdelenie na 5 úsekov) */
+        /* Mierka so zvislými čiarkami */
         .leaflet-control-scale-line { 
             background: rgba(255, 255, 255, 0.95) !important; 
             border: 3px solid #000 !important; 
@@ -34,16 +34,11 @@
             color: #000 !important; 
             font-weight: bold !important; 
             font-size: 18px !important; 
-            padding: 6px 8px 4px 8px !important; 
+            padding: 6px 8px 12px 8px !important; 
             box-shadow: 0 0 5px rgba(0,0,0,0.5) !important; 
             line-height: 1.2 !important; 
             position: relative;
-        }
-        .leaflet-control-scale-line::before {
-            content: '';
-            position: absolute;
-            bottom: 0; left: 0; right: 0; height: 8px;
-            background: repeating-linear-gradient(to right, transparent, transparent calc(20% - 2px), black calc(20% - 2px), black 20%);
+            box-sizing: border-box;
         }
 
         .track-list { list-style: none; padding: 0; display: flex; gap: 5px; flex-wrap: wrap; margin: 0 0 10px 0; }
@@ -79,7 +74,7 @@
 <body>
 
     <div class="card">
-        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v2.6 (Auto-šírka brány a Krížik)</small></h2>
+        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v2.7 (Čisté SVG krížiky a dieliky)</small></h2>
         <input type="text" id="task-name-input" class="input-text" value="Koridor Let 1">
         
         <div class="setting-box">
@@ -144,20 +139,13 @@
         
         let rezimKresleniaBrany = false; let docasnyNazovBrany = ""; let prvyBodBrany = null; let docasnyMarker = null;
 
-        const farbyPiloti = [
-            '#00FFFF', '#FF1493', '#00FF00', '#FFD700', '#FF4500', 
-            '#8A2BE2', '#FFFFFF', '#FF00FF', '#32CD32', '#00BFFF' 
-        ];
+        const farbyPiloti = ['#00FFFF', '#FF1493', '#00FF00', '#FFD700', '#FF4500', '#8A2BE2', '#FFFFFF', '#FF00FF', '#32CD32', '#00BFFF'];
 
-        // Čistý HTML Zameriavač - Vonkajší kruh a tenký krížik vnútri
-        const bodIcon = L.divIcon({
-            className: 'custom-icon-cross',
-            html: `<div style="position:absolute; top:0; left:0; width:34px; height:34px; border:4px solid #e94560; border-radius:50%; box-sizing:border-box; box-shadow: 0 0 3px black, inset 0 0 3px black;"></div>
-                   <div style="position:absolute; top:16px; left:4px; width:26px; height:2px; background:black; box-shadow: 0 0 1px white;"></div>
-                   <div style="position:absolute; top:4px; left:16px; width:2px; height:26px; background:black; box-shadow: 0 0 1px white;"></div>`,
-            iconSize: [34, 34],
-            iconAnchor: [17, 17]
-        });
+        // TOTO zaručí, že to nikdy nesčernie. Čistý SVG obrázok zameriavača.
+        const svgImage = `data:image/svg+xml;charset=UTF-8,<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40" stroke="%23e94560" stroke-width="12" fill="none"/><line x1="50" y1="20" x2="50" y2="80" stroke="black" stroke-width="6"/><line x1="20" y1="50" x2="80" y2="50" stroke="black" stroke-width="6"/></svg>`;
+        
+        const iconNormal = L.icon({ iconUrl: svgImage, iconSize: [34, 34], iconAnchor: [17, 17] });
+        const iconPrint = L.icon({ iconUrl: svgImage, iconSize: [85, 85], iconAnchor: [42, 42] }); // Zväčšené pre A4 tlač
 
         function getSirka() { return parseInt(document.getElementById('sirka-koridoru').value) || 100; }
 
@@ -180,6 +168,25 @@
                 nacitatVsetkyTrateZPamate();
                 map.on('click', mapClickAction);
                 setTimeout(() => { if(map) map.invalidateSize(); }, 300);
+
+                // Neustále pridávanie fyzických DOM čiarok do mierky pre foťák
+                setInterval(() => {
+                    let scaleLines = document.querySelectorAll('.leaflet-control-scale-line');
+                    scaleLines.forEach(scaleLine => {
+                        if(!scaleLine.querySelector('.tick-container')) {
+                            let tc = document.createElement('div');
+                            tc.className = 'tick-container';
+                            tc.style.cssText = 'position:absolute; bottom:0; left:0; width:100%; height:8px; display:flex; justify-content:space-between;';
+                            for(let i=0; i<=5; i++) {
+                                let tick = document.createElement('div');
+                                tick.style.cssText = 'width:3px; height:8px; background:black;';
+                                tc.appendChild(tick);
+                            }
+                            scaleLine.appendChild(tc);
+                        }
+                    });
+                }, 1000);
+
             } catch (error) { console.error("Chyba mapy:", error); }
         }
 
@@ -233,14 +240,14 @@
             let bounds = L.latLngBounds(mojeOtocneBody.map(b => [b.lat, b.lon]));
             map.fitBounds(bounds, { padding: [150, 150] });
 
-            // Dočasné zväčšenie ikon, aby na obrovskej mape nezanikli
-            document.querySelectorAll('.custom-icon-cross').forEach(el => {
-                el.style.transform = 'scale(2.5)';
-                el.style.transformOrigin = 'center';
+            // Zväčšenie ikon natívne cez Leaflet aby boli na veľkej mape obrovské a čitateľné
+            mapMarkers.forEach(m => {
+                if (m.setIcon && m.options.markerType === 'waypoint') { m.setIcon(iconPrint); }
             });
+
             const scaleL = document.querySelector('.leaflet-control-scale-line');
             if (scaleL) {
-                scaleL.style.transform = 'scale(2.5)';
+                scaleL.style.transform = 'scale(3)';
                 scaleL.style.transformOrigin = 'bottom left';
             }
 
@@ -251,13 +258,16 @@
                     link.href = canvas.toDataURL('image/jpeg', 0.9); 
                     link.click();
                     
+                    // Návrat do normálu
                     mapDiv.style.width = oW; mapDiv.style.height = oH; mapDiv.style.position = oPos; mapDiv.style.zIndex = oZ; mapDiv.style.top = oT; mapDiv.style.left = oL;
                     map.invalidateSize();
                     map.fitBounds(bounds, { padding: [20, 20] });
                     
-                    document.querySelectorAll('.custom-icon-cross').forEach(el => { el.style.transform = 'scale(1)'; });
+                    mapMarkers.forEach(m => {
+                        if (m.setIcon && m.options.markerType === 'waypoint') { m.setIcon(iconNormal); }
+                    });
+
                     if (scaleL) { scaleL.style.transform = 'scale(1)'; }
-                    
                     zoomControls.forEach(el => el.style.display = 'block');
                     btn.innerHTML = staryText;
                     btn.style.background = "#e94560";
@@ -265,9 +275,11 @@
                     mapDiv.style.width = oW; mapDiv.style.height = oH; mapDiv.style.position = oPos; mapDiv.style.zIndex = oZ; mapDiv.style.top = oT; mapDiv.style.left = oL;
                     map.invalidateSize();
                     
-                    document.querySelectorAll('.custom-icon-cross').forEach(el => { el.style.transform = 'scale(1)'; });
-                    if (scaleL) { scaleL.style.transform = 'scale(1)'; }
+                    mapMarkers.forEach(m => {
+                        if (m.setIcon && m.options.markerType === 'waypoint') { m.setIcon(iconNormal); }
+                    });
 
+                    if (scaleL) { scaleL.style.transform = 'scale(1)'; }
                     zoomControls.forEach(el => el.style.display = 'block');
                     btn.innerHTML = staryText;
                     btn.style.background = "#e94560";
@@ -280,7 +292,6 @@
             const lat = e.latlng.lat; const lon = e.latlng.lng;
             
             if (rezimKresleniaBrany) {
-                // Druhý klik - Výpočet presnej brány zamknutej na šírku koridoru
                 if (docasnyMarker) map.removeLayer(docasnyMarker);
                 document.getElementById('status-kreslenia').style.display = "none"; rezimKresleniaBrany = false;
                 
@@ -288,7 +299,6 @@
                 let lon1 = prvyBodBrany.lon;
                 let sirka = getSirka();
                 
-                // Výpočet uhla smeru k druhému kliku
                 let dx = (lon - lon1) * Math.cos(lat1 * Math.PI / 180);
                 let dy = (lat - lat1);
                 let len = Math.sqrt(dx*dx + dy*dy);
@@ -296,7 +306,6 @@
                 let nx = 0, ny = 1;
                 if(len > 0) { nx = dx / len; ny = dy / len; }
                 
-                // Aplikovanie šírky presne podľa nastavenia koridoru
                 let oLat = ny * sirka / 111320;
                 let oLon = nx * sirka / (111320 * Math.cos(lat1 * Math.PI / 180));
                 
@@ -312,7 +321,7 @@
             
             if (nazovUpper === "START" || nazovUpper === "CIEL") {
                 rezimKresleniaBrany = true; docasnyNazovBrany = nazovUpper; prvyBodBrany = { lat: lat, lon: lon };
-                docasnyMarker = L.marker([lat, lon], {icon: bodIcon}).addTo(map);
+                docasnyMarker = L.marker([lat, lon], {icon: iconNormal}).addTo(map);
                 document.getElementById('status-kreslenia').style.display = "block";
             } else {
                 mojeOtocneBody.push({ nazov: nazovUpper, lat: lat, lon: lon, typ: "point" });
@@ -342,8 +351,7 @@
             }
 
             mojeOtocneBody.forEach((b, i) => {
-                // Používame nový čistý HTML zameriavač
-                const marker = L.marker([b.lat, b.lon], {icon: bodIcon}).addTo(map).bindPopup(`<b>${b.nazov}</b>`);
+                const marker = L.marker([b.lat, b.lon], {icon: iconNormal, markerType: 'waypoint'}).addTo(map).bindPopup(`<b>${b.nazov}</b>`);
                 mapMarkers.push(marker);
 
                 if (b.typ === "gate" && b.p1 && b.p2) { 
