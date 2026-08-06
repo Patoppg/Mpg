@@ -26,7 +26,25 @@
         
         #map { width: 100%; height: 500px; border-radius: 8px; border: 2px solid #555; background: #e5e3df; display: block; position: relative; z-index: 1; overflow: hidden; }
         
-        .leaflet-control-scale-line { background: rgba(255, 255, 255, 0.95) !important; border: 3px solid #000 !important; color: #000 !important; font-weight: bold !important; font-size: 18px !important; padding: 4px 8px !important; box-shadow: 0 0 5px rgba(0,0,0,0.5) !important; line-height: 1.2 !important; }
+        /* Mierka so zvislými čiarkami (rozdelenie na 5 úsekov) */
+        .leaflet-control-scale-line { 
+            background: rgba(255, 255, 255, 0.95) !important; 
+            border: 3px solid #000 !important; 
+            border-top: none !important; 
+            color: #000 !important; 
+            font-weight: bold !important; 
+            font-size: 18px !important; 
+            padding: 6px 8px 4px 8px !important; 
+            box-shadow: 0 0 5px rgba(0,0,0,0.5) !important; 
+            line-height: 1.2 !important; 
+            position: relative;
+        }
+        .leaflet-control-scale-line::before {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0; height: 8px;
+            background: repeating-linear-gradient(to right, transparent, transparent calc(20% - 2px), black calc(20% - 2px), black 20%);
+        }
 
         .track-list { list-style: none; padding: 0; display: flex; gap: 5px; flex-wrap: wrap; margin: 0 0 10px 0; }
         .track-item { background: #0f3460; padding: 6px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #e94560; font-size: 14px; }
@@ -61,7 +79,7 @@
 <body>
 
     <div class="card">
-        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v2.5 (Zameriavač s krížikom)</small></h2>
+        <h2>✈️ Navigačný Koridor <small style="font-size:12px; color:#4caf50;">v2.6 (Auto-šírka brány a Krížik)</small></h2>
         <input type="text" id="task-name-input" class="input-text" value="Koridor Let 1">
         
         <div class="setting-box">
@@ -89,7 +107,7 @@
     </div>
 
     <div class="card">
-        <h3 style="color:#ff9800; display:none; text-align:center;" id="status-kreslenia">✏️ REŽIM BRÁNY: Klikni na mape, kde má brána KONČIŤ!</h3>
+        <h3 style="color:#ff9800; display:none; text-align:center;" id="status-kreslenia">✏️ REŽIM BRÁNY: Klikni smer, ktorým má byť brána otočená!</h3>
         <div id="zoznam-bodov" style="font-size: 14px;"><em style="color:#aaa;">Klikaj do mapy pre pridanie bodov. ("START" alebo "CIEL" zapne kreslenie brány)</em></div>
     </div>
 
@@ -130,6 +148,16 @@
             '#00FFFF', '#FF1493', '#00FF00', '#FFD700', '#FF4500', 
             '#8A2BE2', '#FFFFFF', '#FF00FF', '#32CD32', '#00BFFF' 
         ];
+
+        // Čistý HTML Zameriavač - Vonkajší kruh a tenký krížik vnútri
+        const bodIcon = L.divIcon({
+            className: 'custom-icon-cross',
+            html: `<div style="position:absolute; top:0; left:0; width:34px; height:34px; border:4px solid #e94560; border-radius:50%; box-sizing:border-box; box-shadow: 0 0 3px black, inset 0 0 3px black;"></div>
+                   <div style="position:absolute; top:16px; left:4px; width:26px; height:2px; background:black; box-shadow: 0 0 1px white;"></div>
+                   <div style="position:absolute; top:4px; left:16px; width:2px; height:26px; background:black; box-shadow: 0 0 1px white;"></div>`,
+            iconSize: [34, 34],
+            iconAnchor: [17, 17]
+        });
 
         function getSirka() { return parseInt(document.getElementById('sirka-koridoru').value) || 100; }
 
@@ -205,12 +233,11 @@
             let bounds = L.latLngBounds(mojeOtocneBody.map(b => [b.lat, b.lon]));
             map.fitBounds(bounds, { padding: [150, 150] });
 
-            // Zväčšenie vonkajšieho kruhu a čiar krížika pre veľkú A4 tlač
-            mapMarkers.forEach(m => {
-                if (m.options && m.options.markerType === 'outer') { m.setRadius(35); m.setStyle({weight: 10}); }
-                if (m.options && m.options.markerType === 'cross') { m.setStyle({weight: 6}); }
+            // Dočasné zväčšenie ikon, aby na obrovskej mape nezanikli
+            document.querySelectorAll('.custom-icon-cross').forEach(el => {
+                el.style.transform = 'scale(2.5)';
+                el.style.transformOrigin = 'center';
             });
-
             const scaleL = document.querySelector('.leaflet-control-scale-line');
             if (scaleL) {
                 scaleL.style.transform = 'scale(2.5)';
@@ -228,12 +255,9 @@
                     map.invalidateSize();
                     map.fitBounds(bounds, { padding: [20, 20] });
                     
-                    mapMarkers.forEach(m => {
-                        if (m.options && m.options.markerType === 'outer') { m.setRadius(14); m.setStyle({weight: 4}); }
-                        if (m.options && m.options.markerType === 'cross') { m.setStyle({weight: 2}); }
-                    });
-
+                    document.querySelectorAll('.custom-icon-cross').forEach(el => { el.style.transform = 'scale(1)'; });
                     if (scaleL) { scaleL.style.transform = 'scale(1)'; }
+                    
                     zoomControls.forEach(el => el.style.display = 'block');
                     btn.innerHTML = staryText;
                     btn.style.background = "#e94560";
@@ -241,11 +265,9 @@
                     mapDiv.style.width = oW; mapDiv.style.height = oH; mapDiv.style.position = oPos; mapDiv.style.zIndex = oZ; mapDiv.style.top = oT; mapDiv.style.left = oL;
                     map.invalidateSize();
                     
-                    mapMarkers.forEach(m => {
-                        if (m.options && m.options.markerType === 'outer') { m.setRadius(14); m.setStyle({weight: 4}); }
-                        if (m.options && m.options.markerType === 'cross') { m.setStyle({weight: 2}); }
-                    });
-                    
+                    document.querySelectorAll('.custom-icon-cross').forEach(el => { el.style.transform = 'scale(1)'; });
+                    if (scaleL) { scaleL.style.transform = 'scale(1)'; }
+
                     zoomControls.forEach(el => el.style.display = 'block');
                     btn.innerHTML = staryText;
                     btn.style.background = "#e94560";
@@ -256,22 +278,41 @@
 
         function mapClickAction(e) {
             const lat = e.latlng.lat; const lon = e.latlng.lng;
+            
             if (rezimKresleniaBrany) {
+                // Druhý klik - Výpočet presnej brány zamknutej na šírku koridoru
                 if (docasnyMarker) map.removeLayer(docasnyMarker);
                 document.getElementById('status-kreslenia').style.display = "none"; rezimKresleniaBrany = false;
-                mojeOtocneBody.push({ nazov: docasnyNazovBrany, typ: "gate", lat: (prvyBodBrany.lat + lat) / 2, lon: (prvyBodBrany.lon + lon) / 2, p1: [prvyBodBrany.lat, prvyBodBrany.lon], p2: [lat, lon] });
+                
+                let lat1 = prvyBodBrany.lat;
+                let lon1 = prvyBodBrany.lon;
+                let sirka = getSirka();
+                
+                // Výpočet uhla smeru k druhému kliku
+                let dx = (lon - lon1) * Math.cos(lat1 * Math.PI / 180);
+                let dy = (lat - lat1);
+                let len = Math.sqrt(dx*dx + dy*dy);
+                
+                let nx = 0, ny = 1;
+                if(len > 0) { nx = dx / len; ny = dy / len; }
+                
+                // Aplikovanie šírky presne podľa nastavenia koridoru
+                let oLat = ny * sirka / 111320;
+                let oLon = nx * sirka / (111320 * Math.cos(lat1 * Math.PI / 180));
+                
+                let p1 = [lat1 + oLat, lon1 + oLon];
+                let p2 = [lat1 - oLat, lon1 - oLon];
+                
+                mojeOtocneBody.push({ nazov: docasnyNazovBrany, typ: "gate", lat: lat1, lon: lon1, p1: p1, p2: p2 });
                 prekresliVsetkyBody(); return;
             }
+            
             const cisloBodov = mojeOtocneBody.length + 1; let pNazov = cisloBodov === 1 ? "START" : "Otocak " + cisloBodov;
             const nazov = prompt("Názov bodu:", pNazov); if (!nazov) return; const nazovUpper = nazov.toUpperCase();
+            
             if (nazovUpper === "START" || nazovUpper === "CIEL") {
                 rezimKresleniaBrany = true; docasnyNazovBrany = nazovUpper; prvyBodBrany = { lat: lat, lon: lon };
-                
-                let tmpO = L.circleMarker([lat, lon], { radius: 14, color: '#e94560', weight: 4, fill: false });
-                let tmpH = L.polyline([[lat, lon - 0.00012], [lat, lon + 0.00012]], { color: 'black', weight: 2 });
-                let tmpV = L.polyline([[lat - 0.00008, lon], [lat + 0.00008, lon]], { color: 'black', weight: 2 });
-                docasnyMarker = L.layerGroup([tmpO, tmpH, tmpV]).addTo(map);
-                
+                docasnyMarker = L.marker([lat, lon], {icon: bodIcon}).addTo(map);
                 document.getElementById('status-kreslenia').style.display = "block";
             } else {
                 mojeOtocneBody.push({ nazov: nazovUpper, lat: lat, lon: lon, typ: "point" });
@@ -300,18 +341,10 @@
                 statBox.style.display = 'none';
             }
 
-            // Kreslenie bodov: Vonkajší červený kruh + Tenký čierny krížik v strede
             mojeOtocneBody.forEach((b, i) => {
-                let outer = L.circleMarker([b.lat, b.lon], { radius: 14, color: '#e94560', weight: 4, fill: false, markerType: 'outer' }).addTo(map).bindPopup(`<b>${b.nazov}</b>`);
-                
-                let cLat = 0.00008;
-                let cLon = 0.00012;
-                let hLine = L.polyline([[b.lat, b.lon - cLon], [b.lat, b.lon + cLon]], { color: 'black', weight: 2, markerType: 'cross' }).addTo(map);
-                let vLine = L.polyline([[b.lat - cLat, b.lon], [b.lat + cLat, b.lon]], { color: 'black', weight: 2, markerType: 'cross' }).addTo(map);
-
-                mapMarkers.push(outer);
-                mapMarkers.push(hLine);
-                mapMarkers.push(vLine);
+                // Používame nový čistý HTML zameriavač
+                const marker = L.marker([b.lat, b.lon], {icon: bodIcon}).addTo(map).bindPopup(`<b>${b.nazov}</b>`);
+                mapMarkers.push(marker);
 
                 if (b.typ === "gate" && b.p1 && b.p2) { 
                     mapVisuals.push(L.polyline([b.p1, b.p2], { color: 'black', weight: 8 }).addTo(map));
