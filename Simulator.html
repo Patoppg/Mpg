@@ -3,54 +3,458 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MPG Simulátor v5.1 - 10 Pilotov</title>
+    <title>MPG Simulátor v5.2 - Plná Verzia (10 Pilotov)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
-        body { font-family: sans-serif; background: #1a1a2e; color: white; padding: 20px; text-align: center; }
-        .card { background: #16213e; padding: 20px; border-radius: 8px; max-width: 600px; margin: 0 auto; border: 1px solid #0f3460; }
-        h1 { color: #ff9800; }
-        .btn { border: none; padding: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 10px; width: 100%; color: white; }
-        .btn-score { background: #008CBA; }
-        #log { margin-top: 20px; text-align: left; font-size: 13px; color: #aaa; background: #0f3460; padding: 10px; height: 250px; overflow-y: auto; border-radius: 5px; }
+        body { font-family: sans-serif; background: #1a1a2e; color: white; padding: 20px; text-align: center; margin: 0; }
+        .card { background: #16213e; padding: 20px; border-radius: 8px; border: 1px solid #0f3460; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        h1 { color: #ff9800; margin-top: 0; }
+        .btn { border: none; padding: 15px 20px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 15px; width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.3); color: white; transition: 0.2s; }
+        .btn-upload { background: #4caf50; } .btn-upload:hover { background: #45a049; }
+        .btn-koridor { background: #e94560; opacity: 0.5; cursor: not-allowed; } .btn-koridor.active { opacity: 1; cursor: pointer; } .btn-koridor.active:hover { background: #ff4757; }
+        .btn-score { background: #008CBA; opacity: 0.5; cursor: not-allowed; } .btn-score.active { opacity: 1; cursor: pointer; } .btn-score.active:hover { background: #00a8e0; }
+        
+        .log { margin-top: 20px; text-align: left; font-size: 13px; color: #aaa; background: #0f3460; padding: 10px; border-radius: 5px; height: 250px; overflow-y: auto; border: 1px solid #555; }
+        .desc { font-size: 14px; color: #ccc; margin-bottom: 10px; line-height: 1.5; }
+        
+        .wind-box { display: flex; justify-content: space-between; background: #0f3460; padding: 15px; border-radius: 8px; margin-top: 15px; text-align: left; }
+        .wind-box div { flex: 1; margin: 0 5px; }
+        .wind-box label { font-size: 12px; color: #aaa; display: block; margin-bottom: 5px; }
+        .wind-box select, .wind-box input { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #555; background: #1a1a2e; color: white; font-weight: bold; }
+        
+        #map { width: 100%; height: 350px; border-radius: 8px; margin-top: 15px; border: 2px solid #ff9800; display: none; }
+        #map-instruction { color: #ff9800; font-weight: bold; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
+
     <div class="card">
-        <h1>🌬️ MPG Simulátor v5.1</h1>
-        <p>Generujem 10 reálnych pilotov. Sleduj log, ako bojujú s vetrom!</p>
-        <button class="btn btn-score" onclick="spustiSimulaciu()">Spustiť 10 pilotov 🎯</button>
+        <h1>🌬️ MPG Simulátor v5.2</h1>
+        <p class="desc">Plne funkčný motor: Nahraj GPX, zvoľ vzlet a vygeneruj reálnych (nedokonalých) pilotov s IGC výstupom.</p>
+        
+        <input type="file" id="gpx-input" accept=".gpx" style="display:none;" onchange="nacitatGPX(event)">
+        <button class="btn btn-upload" onclick="document.getElementById('gpx-input').click()">1. Načítať vlastnú GPX trasu 📂</button>
+        
+        <div id="map-instruction">👇 KLIKNI DO MAPY NA MIESTO VZLETU 👇</div>
+        <div id="map"></div>
+
+        <div class="wind-box">
+            <div>
+                <label>Smer Vetra (Odkiaľ fúka):</label>
+                <select id="wind-dir">
+                    <option value="0">Severný (N)</option>
+                    <option value="45">Severovýchod (NE)</option>
+                    <option value="90">Východný (E)</option>
+                    <option value="135" selected>Juhovýchod (SE)</option>
+                    <option value="180">Južný (S)</option>
+                    <option value="225">Juhozápad (SW)</option>
+                    <option value="270">Západný (W)</option>
+                    <option value="315">Severozápad (NW)</option>
+                </select>
+            </div>
+            <div>
+                <label>Sila Vetra (km/h):</label>
+                <input type="number" id="wind-speed" value="10" min="0" max="40">
+            </div>
+        </div>
+
+        <button id="btn-k" class="btn btn-koridor" onclick="spustiKoridor()" disabled>2. Generovať: KORIDOR 🛤️</button>
+        <button id="btn-s" class="btn btn-score" onclick="spustiScoreHunterAI()" disabled>2. Generovať 10 Pilotov: SCORE HUNTER 🎯</button>
+        
         <div id="log" class="log">Pripravený...</div>
     </div>
 
     <script>
-        const pauza = () => new Promise(resolve => setTimeout(resolve, 80)); // Mierne dlhšia pauza pre istotu
-        function loguj(text) { const l = document.getElementById('log'); l.innerHTML += `<div>${text}</div>`; l.scrollTop = l.scrollHeight; }
+        const R = 6371000;
+        let nahraneBody = [];
 
-        async function spustiSimulaciu() {
-            loguj("<b style='color:#ff9800;'>Štartujem generovanie 10 pilotov...</b>");
-            
-            // 10 pilotov s rôznymi vlastnosťami
-            const piloti = [
-                "Jano", "Fero", "Miso", "Pato", "Ivan", 
-                "Laco", "Stano", "Marek", "Petr", "Tomas"
-            ];
+        let map = null;
+        let vzletMarker = null;
+        let vzletPoint = null;
+        let pLayerGroup = null;
 
-            for(let i=0; i<10; i++) {
-                await pauza(); // Kľúč k tomu, aby mobil nezamrzol
-                
-                let meno = piloti[i];
-                let odvaha = (Math.random() * 0.5 + 0.5).toFixed(2); // 0.5 - 1.0
-                let presnost = (Math.random() * 0.4 + 0.6).toFixed(2); // 0.6 - 1.0
-                
-                loguj(`✈️ Pilot <b>${meno}</b> vyštartoval (Odvaha: ${odvaha}, Presnosť: ${presnost})`);
-                
-                // Simulácia výpočtov letu pre pilota...
-                // Tu appka počíta dráhu, vietor, brány atď.
+        function loguj(text) {
+            const l = document.getElementById('log');
+            l.innerHTML += `<div>${text}</div>`;
+            l.scrollTop = l.scrollHeight;
+        }
+
+        const pauza = () => new Promise(resolve => setTimeout(resolve, 80));
+
+        function initMap() {
+            if (!map) {
+                document.getElementById('map').style.display = "block";
+                document.getElementById('map-instruction').style.display = "block";
+                map = L.map('map').setView([48.461, 17.518], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                pLayerGroup = L.layerGroup().addTo(map);
+
+                map.on('click', function(e) {
+                    vzletPoint = { lat: e.latlng.lat, lon: e.latlng.lng };
+                    if (vzletMarker) map.removeLayer(vzletMarker);
+                    
+                    const svgIcon = L.icon({
+                        iconUrl: `data:image/svg+xml;charset=UTF-8,<svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40" fill="%234caf50" stroke="white" stroke-width="4"/><text x="50" y="65" font-size="40" text-anchor="middle" fill="white" font-family="sans-serif">H</text></svg>`,
+                        iconSize: [40, 40], iconAnchor: [20, 20]
+                    });
+
+                    vzletMarker = L.marker([vzletPoint.lat, vzletPoint.lon], {icon: svgIcon})
+                        .addTo(map).bindPopup("<b>🚁 Miesto Vzletu a Pristátia</b>").openPopup();
+                    
+                    skontrolujPripravenost();
+                    loguj("✅ Vzletisko nastavené. Môžeš generovať.");
+                });
             }
-            loguj("<b style='color:#4caf50;'>🎉 10 pilotov úspešne v cieli!</b>");
+        }
+
+        function skontrolujPripravenost() {
+            if (nahraneBody.length > 0 && vzletPoint !== null) {
+                document.getElementById('btn-k').disabled = false;
+                document.getElementById('btn-k').classList.add('active');
+                document.getElementById('btn-s').disabled = false;
+                document.getElementById('btn-s').classList.add('active');
+            }
+        }
+
+        function nacitatGPX(e) {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const parser = new DOMParser(); const xmlDoc = parser.parseFromString(evt.target.result, "text/xml");
+                    const wpts = xmlDoc.getElementsByTagName("wpt");
+                    nahraneBody = [];
+                    initMap();
+                    pLayerGroup.clearLayers();
+
+                    let boundsArr = [];
+
+                    for (let i = 0; i < wpts.length; i++) {
+                        let node = wpts[i];
+                        let lat = parseFloat(node.getAttribute("lat"));
+                        let lon = parseFloat(node.getAttribute("lon"));
+                        let nameNode = node.getElementsByTagName("name")[0];
+                        let nazov = nameNode ? nameNode.textContent.toUpperCase() : "BOD";
+                        
+                        let descNode = node.getElementsByTagName("desc")[0]; 
+                        let descText = descNode ? descNode.textContent : "";
+                        
+                        let typ = "point"; let p1 = null; let p2 = null;
+                        
+                        if (descText.includes("typ=gate")) {
+                            typ = "gate";
+                            let p1match = descText.match(/p1=([^,]+),([^;]+)/);
+                            let p2match = descText.match(/p2=([^,]+),([^\s<]+)/);
+                            if(p1match && p2match) {
+                                p1 = { lat: parseFloat(p1match[1]), lon: parseFloat(p2match[2]) }; // Simplified parsing for visual
+                                p2 = { lat: parseFloat(p2match[1]), lon: parseFloat(p2match[2]) }; // Just for map bounds
+                            }
+                        } else {
+                            L.circleMarker([lat, lon], {color: 'red', radius: 6}).addTo(pLayerGroup);
+                        }
+                        
+                        // Fix pre Score Hunter brány, zoberie si rovno p1, p2 zo stringu ak existuje
+                        if(typ === "gate" && descText.includes("p1=")){
+                           let parts = descText.replace("MPG_META:", "").split(";");
+                            parts.forEach(p => {
+                                let kv = p.split("=");
+                                if (kv[0] === "p1" && kv[1]) p1 = kv[1].split(",").map(Number);
+                                if (kv[0] === "p2" && kv[1]) p2 = kv[1].split(",").map(Number);
+                            });
+                            if(p1 && p2) {
+                                p1 = { lat: p1[0], lon: p1[1] };
+                                p2 = { lat: p2[0], lon: p2[1] };
+                            }
+                        }
+
+                        nahraneBody.push({ lat: lat, lon: lon, nazov: nazov, typ: typ, p1: p1, p2: p2 });
+                        boundsArr.push([lat, lon]);
+                    }
+                    
+                    if (nahraneBody.length < 3) { alert("GPX musí obsahovať START, CIEL a aspoň 1 bod!"); return; }
+
+                    map.fitBounds(boundsArr, {padding: [30,30]});
+                    loguj(`--- Načítaná trať z ${file.name} ---`);
+                    loguj(`⚠️ Zvoľ kliknutím do mapy miesto VZLETU.`);
+
+                } catch(err) { alert("Chyba pri čítaní GPX: " + err); }
+            };
+            reader.readAsText(file);
+        }
+
+        function dist(lat1, lon1, lat2, lon2) {
+            const dLat=(lat2-lat1)*Math.PI/180; const dLon=(lon2-lon1)*Math.PI/180; 
+            const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2); 
+            return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+        }
+
+        function getBearing(lat1, lon1, lat2, lon2) {
+            let l1 = lat1 * Math.PI / 180; let l2 = lat2 * Math.PI / 180;
+            let dl = (lon2 - lon1) * Math.PI / 180;
+            let y = Math.sin(dl) * Math.cos(l2);
+            let x = Math.cos(l1) * Math.sin(l2) - Math.sin(l1) * Math.cos(l2) * Math.cos(dl);
+            let brg = Math.atan2(y, x) * 180 / Math.PI;
+            return (brg + 360) % 360;
+        }
+
+        function getGroundSpeed(airSpeedKmh, bearing, windDir, windSpeedKmh) {
+            let angleDiff = (bearing - windDir) * Math.PI / 180;
+            let headwind = windSpeedKmh * Math.cos(angleDiff);
+            let gs = airSpeedKmh - headwind;
+            if (gs < 10) gs = 10;
+            return gs;
+        }
+
+        function getGateVectors(gatePoint) {
+            if(!gatePoint || !gatePoint.p1 || !gatePoint.p2) return null;
+            let dx = gatePoint.p2.lon - gatePoint.p1.lon;
+            let dy = gatePoint.p2.lat - gatePoint.p1.lat;
+            let len = Math.sqrt(dx*dx + dy*dy);
+            let normLat = -dx / len; 
+            let normLon = dy / len;  
+            
+            let pred = { lat: gatePoint.lat + normLat * 0.002, lon: gatePoint.lon + normLon * 0.002 };
+            let za = { lat: gatePoint.lat - normLat * 0.002, lon: gatePoint.lon - normLon * 0.002 };
+            return { approach: pred, center: gatePoint, exit: za };
+        }
+
+        function zapisBodIGC(records, lat, lon, timeSec) {
+            let h = Math.floor(10 + timeSec / 3600);
+            let m = Math.floor((timeSec % 3600) / 60);
+            let s = Math.floor(timeSec % 60);
+            let timeStr = String(h).padStart(2,'0') + String(m).padStart(2,'0') + String(s).padStart(2,'0');
+
+            let latDeg = Math.floor(Math.abs(lat)); let latMin = (Math.abs(lat) - latDeg) * 60;
+            let latStr = String(latDeg).padStart(2,'0') + (latMin.toFixed(3).replace('.','').padStart(5,'0')) + (lat >= 0 ? 'N' : 'S');
+            let lonDeg = Math.floor(Math.abs(lon)); let lonMin = (Math.abs(lon) - lonDeg) * 60;
+            let lonStr = String(lonDeg).padStart(3,'0') + (lonMin.toFixed(3).replace('.','').padStart(5,'0')) + (lon >= 0 ? 'E' : 'W');
+
+            records.push(`B${timeStr}${latStr}${lonStr}A0000000000`);
+        }
+
+        // ================= SCORE HUNTER (ASYNC + 10 PILOTOV + WOBBLE) =================
+        async function spustiScoreHunterAI() {
+            try {
+                let startBod = nahraneBody.find(b => b.nazov.includes("START"));
+                let cielBod = nahraneBody.find(b => b.nazov.includes("CIEL"));
+                let otocaky = nahraneBody.filter(b => b.typ === "point");
+
+                if (!startBod || !cielBod) { alert("GPX neobsahuje brány START a CIEL!"); return; }
+
+                let startVectors = getGateVectors(startBod);
+                let cielVectors = getGateVectors(cielBod);
+
+                if (!startVectors || !cielVectors) { 
+                    loguj("<b style='color:red'>CHYBA: Brány nemajú čiary. Vytvor body znova v appke Score Hunter!</b>");
+                    return; 
+                }
+
+                let windDir = parseInt(document.getElementById('wind-dir').value);
+                let windSpeed = parseInt(document.getElementById('wind-speed').value);
+                let limitSec = 60 * 60; 
+
+                loguj(`<hr><b style='color:#008CBA;'>Vypúšťam 10 reálnych pilotov...</b>`);
+                let zip = new JSZip();
+                let folder = zip.folder("ScoreHunter_10_Pilotov");
+
+                const piloti = [
+                    { meno: "01_Jano", speedMin: 45, speedMax: 55, greedy: 0.2, drift: 0.0003 },
+                    { meno: "02_Fero", speedMin: 50, speedMax: 65, greedy: 0.8, drift: 0.0005 },
+                    { meno: "03_Miso", speedMin: 40, speedMax: 50, greedy: 0.1, drift: 0.0002 },
+                    { meno: "04_Pato", speedMin: 55, speedMax: 60, greedy: 0.9, drift: 0.0004 },
+                    { meno: "05_Ivan", speedMin: 48, speedMax: 52, greedy: 0.5, drift: 0.0003 },
+                    { meno: "06_Laco", speedMin: 50, speedMax: 70, greedy: 0.95, drift: 0.0006 },
+                    { meno: "07_Stano", speedMin: 42, speedMax: 48, greedy: 0.1, drift: 0.0002 },
+                    { meno: "08_Marek", speedMin: 45, speedMax: 60, greedy: 0.6, drift: 0.0004 },
+                    { meno: "09_Petr", speedMin: 50, speedMax: 55, greedy: 0.4, drift: 0.0002 },
+                    { meno: "10_Tomas", speedMin: 60, speedMax: 65, greedy: 0.85, drift: 0.0005 }
+                ];
+
+                for(let i = 0; i < piloti.length; i++) {
+                    await pauza(); // TOTO ZABRÁNI ZAMRZNUTIU MOBILU!
+
+                    let p = piloti[i];
+                    loguj(`⏳ Počítam let: <b>${p.meno}</b> (Rýchlosť ${p.speedMin}-${p.speedMax}km/h)...`);
+                    
+                    let records = [`AXXX ${p.meno}`, `HFDTE140826`, `HFPLTPILOTINCHARGE:${p.meno}`];
+                    let currentTime = 0;
+                    
+                    let trasa = [];
+                    trasa.push(vzletPoint, startVectors.approach, startBod, startVectors.exit);
+
+                    let availablePoints = [...otocaky].sort(() => 0.5 - Math.random());
+                    let currentPos = startVectors.exit;
+                    let flightTimeEst = 0;
+                    let isGreedy = Math.random() < p.greedy; 
+                    let airSpeed = Math.floor(Math.random() * (p.speedMax - p.speedMin + 1)) + p.speedMin;
+
+                    for (let j = 0; j < availablePoints.length; j++) {
+                        let target = availablePoints[j];
+                        
+                        // Pridanie "Wobble" efektu (letia mierne mimo presný stred bodu)
+                        let tLat = target.lat + (Math.random() - 0.5) * p.drift;
+                        let tLon = target.lon + (Math.random() - 0.5) * p.drift;
+                        let virtualTarget = { lat: tLat, lon: tLon };
+
+                        let brgToTarget = getBearing(currentPos.lat, currentPos.lon, virtualTarget.lat, virtualTarget.lon);
+                        let gsToTarget = getGroundSpeed(airSpeed, brgToTarget, windDir, windSpeed) / 3.6;
+                        let timeToTarget = dist(currentPos.lat, currentPos.lon, virtualTarget.lat, virtualTarget.lon) / gsToTarget;
+
+                        let brgToCiel = getBearing(virtualTarget.lat, virtualTarget.lon, cielVectors.approach.lat, cielVectors.approach.lon);
+                        let gsToCiel = getGroundSpeed(airSpeed, brgToCiel, windDir, windSpeed) / 3.6;
+                        let timeToCiel = dist(virtualTarget.lat, virtualTarget.lon, cielVectors.approach.lat, cielVectors.approach.lon) / gsToCiel;
+
+                        let projectedTotalTime = flightTimeEst + timeToTarget + timeToCiel;
+
+                        if (projectedTotalTime > limitSec) {
+                            if (isGreedy && Math.random() > 0.3 && projectedTotalTime < limitSec + 900) { } 
+                            else { break; }
+                        }
+
+                        trasa.push(virtualTarget);
+                        flightTimeEst += timeToTarget;
+                        currentPos = virtualTarget;
+                    }
+
+                    trasa.push(cielVectors.approach, cielBod, cielVectors.exit, vzletPoint);
+
+                    let currentLat = trasa[0].lat; let currentLon = trasa[0].lon;
+                    zapisBodIGC(records, currentLat, currentLon, currentTime);
+
+                    for (let k = 1; k < trasa.length; k++) {
+                        let p2 = trasa[k];
+                        let brg = getBearing(currentLat, currentLon, p2.lat, p2.lon);
+                        
+                        // Mierne dynamická zmena rýchlosti v danom úseku
+                        let currentAirSpeed = airSpeed + (Math.random() * 4 - 2); 
+                        let gsMs = getGroundSpeed(currentAirSpeed, brg, windDir, windSpeed) / 3.6;
+                        
+                        let distM = dist(currentLat, currentLon, p2.lat, p2.lon);
+                        let segTime = distM / gsMs;
+
+                        for (let t = 4; t <= segTime; t += 4) { 
+                            let ratio = t / segTime;
+                            let cLat = currentLat + (p2.lat - currentLat) * ratio;
+                            let cLon = currentLon + (p2.lon - currentLon) * ratio;
+                            currentTime += 4;
+                            zapisBodIGC(records, cLat, cLon, currentTime);
+                        }
+                        currentLat = p2.lat; currentLon = p2.lon;
+                    }
+
+                    folder.file(`${p.meno}.igc`, records.join("\n"));
+                    
+                    let minutyLufte = Math.floor(currentTime / 60);
+                    let textInfo = `✅ ${p.meno} pristál. Nazbieral ${trasa.length - 8} bodov.`;
+                    if (minutyLufte > 60) textInfo += ` <span style="color:#e94560;">(Meškal, dĺžka letu: ${minutyLufte}m)</span>`;
+                    loguj(textInfo);
+                }
+
+                await pauza();
+                loguj("⏳ Zabaľujem ZIP súbor...");
+                
+                zip.generateAsync({type:"blob"}).then(function(c) { 
+                    saveAs(c, "Mpg_10_Pilotov.zip"); 
+                    loguj("🎉 <b>HOTOVO! Súbor ZIP stiahnutý.</b>"); 
+                });
+
+            } catch (err) {
+                loguj(`<b style='color:red'>CHYBA: ${err.message}</b>`);
+            }
+        }
+
+        // ================= KORIDOR =================
+        async function spustiKoridor() {
+            try {
+                let startBod = nahraneBody.find(b => b.nazov.includes("START"));
+                let cielBod = nahraneBody.find(b => b.nazov.includes("CIEL"));
+                let otocaky = nahraneBody.filter(b => b.typ === "point");
+
+                if (!startBod || !cielBod) { alert("GPX neobsahuje brány START a CIEL!"); return; }
+
+                let startVectors = getGateVectors(startBod);
+                let cielVectors = getGateVectors(cielBod);
+
+                if (!startVectors || !cielVectors) { 
+                    loguj("<b style='color:red'>CHYBA: Brány nemajú čiary. Vytvor body znova v appke!</b>");
+                    return; 
+                }
+
+                let windDir = parseInt(document.getElementById('wind-dir').value);
+                let windSpeed = parseInt(document.getElementById('wind-speed').value);
+
+                loguj(`<hr><b style='color:#e94560;'>Generujem KORIDOR (Krok po kroku)...</b>`);
+                let zip = new JSZip();
+                let folder = zip.folder("Test_Mobil_Koridor");
+
+                const scenare = [
+                    { id: "01", meno: "Perfektny", speed: 50, off: 0 },
+                    { id: "02", meno: "Rychly", speed: 65, off: 0 },
+                    { id: "03", meno: "Pomaly", speed: 35, off: 0 },
+                    { id: "04", meno: "Mimo_Trate", speed: 55, off: 150 },
+                    { id: "05", meno: "Skracuje", speed: 60, off: -100 }
+                ];
+
+                for(let i=0; i<scenare.length; i++) {
+                    await pauza();
+                    let sc = scenare[i];
+                    loguj(`⏳ Počítam let: <b>${sc.id}_${sc.meno}</b>...`);
+
+                    let records = [`AXXX ${sc.id}_${sc.meno}`, `HFDTE140826`, `HFPLTPILOTINCHARGE:${sc.id}_${sc.meno}`];
+                    let currentTime = 0;
+                    
+                    let trasa = [vzletPoint, startVectors.approach, startBod, startVectors.exit];
+                    otocaky.forEach(o => trasa.push(o));
+                    trasa.push(cielVectors.approach, cielBod, cielVectors.exit, vzletPoint);
+
+                    let currentLat = trasa[0].lat; let currentLon = trasa[0].lon;
+                    zapisBodIGC(records, currentLat, currentLon, currentTime);
+
+                    for (let k = 1; k < trasa.length; k++) {
+                        let p2 = trasa[k];
+                        let brg = getBearing(currentLat, currentLon, p2.lat, p2.lon);
+                        let gsMs = getGroundSpeed(sc.speed, brg, windDir, windSpeed) / 3.6;
+                        let distM = dist(currentLat, currentLon, p2.lat, p2.lon);
+                        let segTime = distM / gsMs;
+
+                        for (let t = 4; t <= segTime; t += 4) { 
+                            let ratio = t / segTime;
+                            let cLat = currentLat + (p2.lat - currentLat) * ratio;
+                            let cLon = currentLon + (p2.lon - currentLon) * ratio;
+                            
+                            if (k > 3 && k < trasa.length - 2 && sc.off !== 0) {
+                                let normLat = -(p2.lon - currentLon) / Math.sqrt((p2.lat-currentLat)**2 + (p2.lon-currentLon)**2);
+                                let normLon = (p2.lat - currentLat) / Math.sqrt((p2.lat-currentLat)**2 + (p2.lon-currentLon)**2);
+                                cLat += (normLat * sc.off / 111320);
+                                cLon += (normLon * sc.off / (111320 * Math.cos(cLat * Math.PI / 180)));
+                            }
+
+                            currentTime += 4;
+                            zapisBodIGC(records, cLat, cLon, currentTime);
+                        }
+                        currentLat = p2.lat; currentLon = p2.lon;
+                    }
+
+                    folder.file(`${sc.id}_${sc.meno}.igc`, records.join("\n"));
+                    loguj(`✅ ${sc.id}_${sc.meno} hotový!`);
+                }
+
+                await pauza();
+                loguj("⏳ Zabaľujem ZIP súbor...");
+                
+                zip.generateAsync({type:"blob"}).then(function(c) { 
+                    saveAs(c, "Test_Mobil_Koridor.zip"); 
+                    loguj("🎉 <b>HOTOVO! ZIP STIAHNUTÝ!</b>"); 
+                });
+
+            } catch (err) {
+                loguj(`<b style='color:red'>CHYBA: ${err.message}</b>`);
+            }
         }
     </script>
 </body>
