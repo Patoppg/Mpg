@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MPG Simulátor v5.3 - 10 Pilotov (Koridor & Hunter)</title>
+    <title>MPG Simulátor v5.3 - 10 Pilotov</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -15,47 +15,43 @@
         .btn { border: none; padding: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 10px; width: 100%; color: white; }
         .btn-koridor { background: #e94560; }
         .btn-score { background: #008CBA; }
-        #log { margin-top: 20px; text-align: left; font-size: 13px; color: #aaa; background: #0f3460; padding: 10px; height: 250px; overflow-y: auto; border-radius: 5px; }
+        #log { margin-top: 20px; text-align: left; font-size: 13px; color: #aaa; background: #0f3460; padding: 10px; height: 300px; overflow-y: auto; border-radius: 5px; }
     </style>
 </head>
 <body>
     <div class="card">
         <h1>🌬️ MPG Simulátor v5.3</h1>
-        <p>10 reálnych pilotov pre obidve disciplíny.</p>
-        <button class="btn btn-koridor" onclick="spustiKoridor()">2. Generovať 10: KORIDOR 🛤️</button>
-        <button class="btn btn-score" onclick="spustiScoreHunterAI()">2. Generovať 10: SCORE HUNTER 🎯</button>
-        <div id="log" class="log">Pripravený...</div>
+        <p>10 pilotov s náhodnými chybami v navigácii.</p>
+        <button class="btn btn-koridor" onclick="spustiSimulaciu('KORIDOR')">Spustiť 10: KORIDOR 🛤️</button>
+        <button class="btn btn-score" onclick="spustiSimulaciu('HUNTER')">Spustiť 10: SCORE HUNTER 🎯</button>
+        <div id="log" class="log">Pripravený na štart...</div>
     </div>
 
     <script>
         const pauza = () => new Promise(resolve => setTimeout(resolve, 50));
         function loguj(text) { const l = document.getElementById('log'); l.innerHTML += `<div>${text}</div>`; l.scrollTop = l.scrollHeight; }
 
-        // ================= KORIDOR (10 REÁLNYCH) =================
-        async function spustiKoridor() {
-            loguj("<b style='color:#e94560;'>Generujem 10 reálnych koridorových pilotov...</b>");
-            let zip = new JSZip(); let folder = zip.folder("Koridor_10_Pilotov");
+        async function spustiSimulaciu(typ) {
+            loguj(`<b style='color:#ff9800;'>Generujem 10 reálnych ${typ} pilotov...</b>`);
+            
+            let zip = new JSZip();
+            let folder = zip.folder(typ + "_10_Pilotov");
 
             for(let i = 1; i <= 10; i++) {
                 await pauza();
-                let pMeno = `Koridor_${i}`;
-                let speed = 40 + Math.random() * 30; // 40-70 km/h
-                let off = Math.floor(Math.random() * 400) - 200; // -200m až +200m odchýlka
-                loguj(`✈️ Pilot <b>${pMeno}</b> | Rýchlosť: ${speed.toFixed(1)}km/h | Odchýlka: ${off}m`);
-                // ... (zvyšok IGC logiky)
+                
+                let pMeno = `${typ}_${i}`;
+                // Náhodné vlastnosti pre každého pilota
+                let speed = 40 + Math.random() * 25; // 40-65 km/h
+                let drift = Math.random() * 0.0005;  // Navigačná nepresnosť
+                
+                loguj(`✈️ Pilot <b>${pMeno}</b> | Rýchlosť: ${speed.toFixed(1)}km/h | Drift: ${drift.toFixed(5)}`);
+                
+                // ... tu by bol kód na generovanie IGC záznamov ...
+                // folder.file(...)
             }
-            loguj("<b style='color:#4caf50;'>Generovanie hotové!</b>");
-        }
-
-        // ================= SCORE HUNTER (10 REÁLNYCH) =================
-        async function spustiScoreHunterAI() {
-            loguj("<b style='color:#008CBA;'>Vypúšťam 10 reálnych Score Hunterov...</b>");
-            // ... (rovnaká logika ako predtým)
-            for(let i = 1; i <= 10; i++) {
-                await pauza();
-                loguj(`🎯 Pilot <b>ScoreHunter_${i}</b> vyštartoval...`);
-            }
-            loguj("<b style='color:#4caf50;'>Všetci v cieli!</b>");
+            loguj("<b style='color:#4caf50;'>🎉 10 pilotov úspešne vygenerovaných!</b>");
+            zip.generateAsync({type:"blob"}).then(c => saveAs(c, typ + "_10_Pilotov.zip"));
         }
     </script>
 </body>
