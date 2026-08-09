@@ -3,13 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MPG Súťažný Simulátor v2.0</title>
-    <!-- Knižnice na tvorbu ZIP a ukladanie súborov -->
+    <title>MPG Simulátor v4.0 - Vzlet a Pristátie</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
+    <!-- Pridaný Leaflet pre mapu v simulátore -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
         body { font-family: sans-serif; background: #1a1a2e; color: white; padding: 20px; text-align: center; margin: 0; }
-        .card { background: #16213e; padding: 20px; border-radius: 8px; border: 1px solid #0f3460; max-width: 500px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .card { background: #16213e; padding: 20px; border-radius: 8px; border: 1px solid #0f3460; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         h1 { color: #ff9800; margin-top: 0; }
         .btn { border: none; padding: 15px 20px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 15px; width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.3); color: white; transition: 0.2s; }
         .btn-upload { background: #4caf50; } .btn-upload:hover { background: #45a049; }
@@ -17,24 +21,52 @@
         .btn-score { background: #008CBA; opacity: 0.5; cursor: not-allowed; } .btn-score.active { opacity: 1; cursor: pointer; } .btn-score.active:hover { background: #00a8e0; }
         
         .log { margin-top: 20px; text-align: left; font-size: 13px; color: #aaa; background: #0f3460; padding: 10px; border-radius: 5px; height: 250px; overflow-y: auto; border: 1px solid #555; }
-        .desc { font-size: 14px; color: #ccc; margin-bottom: 20px; line-height: 1.5; }
+        .desc { font-size: 14px; color: #ccc; margin-bottom: 10px; line-height: 1.5; }
         
-        .status-box { background: #1a1a2e; border: 1px dashed #555; padding: 10px; margin-top: 15px; border-radius: 5px; font-weight: bold; color: #ff9800; }
+        .wind-box { display: flex; justify-content: space-between; background: #0f3460; padding: 15px; border-radius: 8px; margin-top: 15px; text-align: left; }
+        .wind-box div { flex: 1; margin: 0 5px; }
+        .wind-box label { font-size: 12px; color: #aaa; display: block; margin-bottom: 5px; }
+        .wind-box select, .wind-box input { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #555; background: #1a1a2e; color: white; font-weight: bold; }
+        
+        /* Štýl pre mapu */
+        #map { width: 100%; height: 350px; border-radius: 8px; margin-top: 15px; border: 2px solid #ff9800; display: none; }
+        #map-instruction { color: #ff9800; font-weight: bold; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h1>✈️ Dynamický MPG Simulátor</h1>
-        <p class="desc">1. Nahraj GPX súbor so svojou traťou/bodmi (z apky Koridor alebo Score Hunter).<br>2. Simulátor prečíta tvoje body a vypustí fiktívnych pilotov presne nad tvoju mapu.</p>
+        <h1>🌬️ MPG Simulátor v4.0</h1>
+        <p class="desc">1. Nahraj GPX (Koridor alebo Score Hunter).<br>2. <b>Klikni do mapy</b> a urči fyzické miesto VZLETU a PRISTÁTIA.<br>3. Vygeneruj IGC lety.</p>
         
         <input type="file" id="gpx-input" accept=".gpx" style="display:none;" onchange="nacitatGPX(event)">
         <button class="btn btn-upload" onclick="document.getElementById('gpx-input').click()">1. Načítať vlastnú GPX trasu 📂</button>
         
-        <div id="status" class="status-box">Čakám na GPX súbor...</div>
+        <div id="map-instruction">👇 KLIKNI DO MAPY NA MIESTO VZLETU 👇</div>
+        <div id="map"></div>
+
+        <div class="wind-box">
+            <div>
+                <label>Smer Vetra (Odkiaľ fúka):</label>
+                <select id="wind-dir">
+                    <option value="0">Severný (N)</option>
+                    <option value="45">Severovýchod (NE)</option>
+                    <option value="90">Východný (E)</option>
+                    <option value="135" selected>Juhovýchod (SE)</option>
+                    <option value="180">Južný (S)</option>
+                    <option value="225">Juhozápad (SW)</option>
+                    <option value="270">Západný (W)</option>
+                    <option value="315">Severozápad (NW)</option>
+                </select>
+            </div>
+            <div>
+                <label>Sila Vetra (km/h):</label>
+                <input type="number" id="wind-speed" value="10" min="0" max="40">
+            </div>
+        </div>
 
         <button id="btn-k" class="btn btn-koridor" onclick="spustiKoridor()" disabled>2. Generovať IGC: KORIDOR 🛤️</button>
-        <button id="btn-s" class="btn btn-score" onclick="spustiScoreHunter()" disabled>2. Generovať IGC: SCORE HUNTER 🎯</button>
+        <button id="btn-s" class="btn btn-score" onclick="spustiScoreHunterAI()" disabled>2. Generovať IGC: SCORE HUNTER 🎯</button>
         
         <div id="log" class="log">Pripravený...</div>
     </div>
@@ -42,8 +74,12 @@
     <script>
         const R = 6371000;
         let nahraneBody = [];
-
         const menaPilotov = ["Jano", "Fero", "Miso", "Pato", "Ivan", "Lubo", "Tomas", "Peter", "Martin", "Roman", "David", "Igor", "Marek", "Ondrej", "Vlado"];
+
+        let map = null;
+        let vzletMarker = null;
+        let vzletPoint = null;
+        let pLayerGroup = null;
 
         function loguj(text) {
             const l = document.getElementById('log');
@@ -51,7 +87,42 @@
             l.scrollTop = l.scrollHeight;
         }
 
-        // --- NAČÍTANIE GPX ---
+        // Inicializácia mapy pri načítaní GPX
+        function initMap() {
+            if (!map) {
+                document.getElementById('map').style.display = "block";
+                document.getElementById('map-instruction').style.display = "block";
+                map = L.map('map').setView([48.461, 17.518], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                pLayerGroup = L.layerGroup().addTo(map);
+
+                map.on('click', function(e) {
+                    vzletPoint = { lat: e.latlng.lat, lon: e.latlng.lng };
+                    if (vzletMarker) map.removeLayer(vzletMarker);
+                    
+                    const svgIcon = L.icon({
+                        iconUrl: `data:image/svg+xml;charset=UTF-8,<svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="40" fill="%234caf50" stroke="white" stroke-width="4"/><text x="50" y="65" font-size="40" text-anchor="middle" fill="white" font-family="sans-serif">H</text></svg>`,
+                        iconSize: [40, 40], iconAnchor: [20, 20]
+                    });
+
+                    vzletMarker = L.marker([vzletPoint.lat, vzletPoint.lon], {icon: svgIcon})
+                        .addTo(map).bindPopup("<b>🚁 Miesto Vzletu a Pristátia</b>").openPopup();
+                    
+                    skontrolujPripravenost();
+                    loguj("✅ Miesto vzletu bolo nastavené na mape.");
+                });
+            }
+        }
+
+        function skontrolujPripravenost() {
+            if (nahraneBody.length > 0 && vzletPoint !== null) {
+                document.getElementById('btn-k').disabled = false;
+                document.getElementById('btn-k').classList.add('active');
+                document.getElementById('btn-s').disabled = false;
+                document.getElementById('btn-s').classList.add('active');
+            }
+        }
+
         function nacitatGPX(e) {
             const file = e.target.files[0]; if (!file) return;
             const reader = new FileReader();
@@ -60,113 +131,95 @@
                     const parser = new DOMParser(); const xmlDoc = parser.parseFromString(evt.target.result, "text/xml");
                     const wpts = xmlDoc.getElementsByTagName("wpt");
                     nahraneBody = [];
+                    initMap();
+                    pLayerGroup.clearLayers();
+
+                    let boundsArr = [];
+
                     for (let i = 0; i < wpts.length; i++) {
                         let node = wpts[i];
                         let lat = parseFloat(node.getAttribute("lat"));
                         let lon = parseFloat(node.getAttribute("lon"));
                         let nameNode = node.getElementsByTagName("name")[0];
                         let nazov = nameNode ? nameNode.textContent.toUpperCase() : "BOD";
-                        nahraneBody.push({ lat: lat, lon: lon, nazov: nazov });
+                        
+                        let descNode = node.getElementsByTagName("desc")[0]; 
+                        let descText = descNode ? descNode.textContent : "";
+                        
+                        let typ = "point"; let p1 = null; let p2 = null;
+                        
+                        if (descText.includes("typ=gate")) {
+                            typ = "gate";
+                            let p1match = descText.match(/p1=([^,]+),([^;]+)/);
+                            let p2match = descText.match(/p2=([^,]+),([^\s<]+)/);
+                            if(p1match && p2match) {
+                                p1 = { lat: parseFloat(p1match[1]), lon: parseFloat(p1match[2]) };
+                                p2 = { lat: parseFloat(p2match[1]), lon: parseFloat(p2match[2]) };
+                                L.polyline([[p1.lat, p1.lon], [p2.lat, p2.lon]], {color:'black', weight: 4}).addTo(pLayerGroup);
+                            }
+                        } else {
+                            L.circleMarker([lat, lon], {color: 'red', radius: 6}).addTo(pLayerGroup);
+                        }
+                        
+                        nahraneBody.push({ lat: lat, lon: lon, nazov: nazov, typ: typ, p1: p1, p2: p2 });
+                        boundsArr.push([lat, lon]);
                     }
                     
-                    if (nahraneBody.length < 2) {
-                        alert("GPX musí obsahovať aspoň 2 body!"); return;
-                    }
+                    if (nahraneBody.length < 3) { alert("GPX musí obsahovať START, CIEL a aspoň 1 bod!"); return; }
 
-                    document.getElementById('status').innerHTML = `✅ GPX Načítané!<br>Nájdených bodov: ${nahraneBody.length}`;
-                    document.getElementById('status').style.color = '#4caf50';
-                    
-                    document.getElementById('btn-k').disabled = false;
-                    document.getElementById('btn-k').classList.add('active');
-                    document.getElementById('btn-s').disabled = false;
-                    document.getElementById('btn-s').classList.add('active');
-                    
+                    map.fitBounds(boundsArr, {padding: [30,30]});
                     loguj(`--- Načítaná trať z ${file.name} ---`);
+                    loguj(`⚠️ Zvoľ kliknutím do mapy miesto, odkiaľ budú reálne štartovať!`);
 
                 } catch(err) { alert("Chyba pri čítaní GPX: " + err); }
             };
             reader.readAsText(file);
         }
 
-        // Pomocné funkcie pre GPS matematiku
+        // --- MATEMATIKA A GEOMETRIA ---
         function posunLat(lat, metre) { return lat + (metre / 111320); }
         function posunLon(lon, lat, metre) { return lon + (metre / (111320 * Math.cos(lat * Math.PI / 180))); }
+        
         function dist(lat1, lon1, lat2, lon2) {
             const dLat=(lat2-lat1)*Math.PI/180; const dLon=(lon2-lon1)*Math.PI/180; 
             const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2); 
             return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
         }
 
+        function getBearing(lat1, lon1, lat2, lon2) {
+            let l1 = lat1 * Math.PI / 180; let l2 = lat2 * Math.PI / 180;
+            let dl = (lon2 - lon1) * Math.PI / 180;
+            let y = Math.sin(dl) * Math.cos(l2);
+            let x = Math.cos(l1) * Math.sin(l2) - Math.sin(l1) * Math.cos(l2) * Math.cos(dl);
+            let brg = Math.atan2(y, x) * 180 / Math.PI;
+            return (brg + 360) % 360;
+        }
+
+        function getGroundSpeed(airSpeedKmh, bearing, windDir, windSpeedKmh) {
+            let angleDiff = (bearing - windDir) * Math.PI / 180;
+            let headwind = windSpeedKmh * Math.cos(angleDiff);
+            let gs = airSpeedKmh - headwind;
+            if (gs < 10) gs = 10;
+            return gs;
+        }
+
+        function getGateVectors(gatePoint) {
+            if(!gatePoint.p1 || !gatePoint.p2) return null;
+            let dx = gatePoint.p2.lon - gatePoint.p1.lon;
+            let dy = gatePoint.p2.lat - gatePoint.p1.lat;
+            let len = Math.sqrt(dx*dx + dy*dy);
+            let normLat = -dx / len; 
+            let normLon = dy / len;  
+            
+            // 200 metrov pred a 200 metrov za bránou pre kolmý prelet
+            let pred = { lat: gatePoint.lat + normLat * 0.002, lon: gatePoint.lon + normLon * 0.002 };
+            let za = { lat: gatePoint.lat - normLat * 0.002, lon: gatePoint.lon - normLon * 0.002 };
+            return { approach: pred, center: gatePoint, exit: za };
+        }
+
         function formatCas(s) {
             const m = Math.floor(s/60); const sec = Math.floor(s%60);
             return `${m}m ${sec}s`;
-        }
-
-        // --- JADRO: GENERÁTOR JEDNÉHO LETU ---
-        function letPoTrase(pilotName, waypoints, speedKmh, offsetM, robiSlucku) {
-            let speedMs = speedKmh / 3.6;
-            let records = [];
-            records.push(`AXXX ${pilotName}`);
-            records.push(`HFDTE140826`); 
-            records.push(`HFPLTPILOTINCHARGE:${pilotName}`);
-            
-            let currentTime = 0; 
-            
-            // Predštart (pripojí sa 1km pred prvým bodom, aby pretal bránu v rýchlosti)
-            let zameriavacDLat = waypoints[1].lat - waypoints[0].lat;
-            let zameriavacDLon = waypoints[1].lon - waypoints[0].lon;
-            let startPredX = waypoints[0].lat - (zameriavacDLat * 0.1);
-            let startPredY = waypoints[0].lon - (zameriavacDLon * 0.1);
-            let aktualnyBod = { lat: startPredX, lon: startPredY };
-
-            let vsetkyTratoveBody = [aktualnyBod, ...waypoints];
-            // Za cieľom preletí ešte kúsok, aby cieľovú bránu čisto preťal
-            let pCiel = waypoints[waypoints.length-1];
-            let pPredCielom = waypoints[waypoints.length-2];
-            vsetkyTratoveBody.push({ 
-                lat: pCiel.lat + (pCiel.lat - pPredCielom.lat)*0.1, 
-                lon: pCiel.lon + (pCiel.lon - pPredCielom.lon)*0.1 
-            });
-
-            for (let i = 0; i < vsetkyTratoveBody.length - 1; i++) {
-                let p1 = vsetkyTratoveBody[i];
-                let p2 = vsetkyTratoveBody[i+1];
-                
-                let dLat = p2.lat - p1.lat;
-                let dLon = p2.lon - p1.lon;
-                let len = Math.sqrt(dLat*dLat + dLon*dLon);
-                let normLat = -dLon / len; 
-                let normLon = dLat / len;
-                
-                // Aplikovanie ofsetu (chyby pilota v koridore)
-                let w1Lat = p1.lat + (normLat * offsetM / 111320);
-                let w1Lon = p1.lon + (normLon * offsetM / (111320 * Math.cos(p1.lat * Math.PI / 180)));
-                let w2Lat = p2.lat + (normLat * offsetM / 111320);
-                let w2Lon = p2.lon + (normLon * offsetM / (111320 * Math.cos(p2.lat * Math.PI / 180)));
-
-                let segmentDist = dist(w1Lat, w1Lon, w2Lat, w2Lon);
-                let segmentTime = segmentDist / speedMs;
-                
-                for (let t = 0; t < segmentTime; t += 2) {
-                    let ratio = t / segmentTime;
-                    let cLat = w1Lat + (w2Lat - w1Lat) * ratio;
-                    let cLon = w1Lon + (w2Lon - w1Lon) * ratio;
-                    
-                    zapisBodIGC(records, cLat, cLon, currentTime);
-                    currentTime += 2;
-                    
-                    if (robiSlucku && i === 1 && Math.abs(ratio - 0.5) < 0.01) {
-                        for(let a=0; a<=360; a+=15) {
-                            let rad = a * Math.PI / 180;
-                            let sLat = posunLat(cLat, Math.sin(rad)*80);
-                            let sLon = posunLon(cLon, cLat, Math.cos(rad)*80);
-                            zapisBodIGC(records, sLat, sLon, currentTime);
-                            currentTime += 2;
-                        }
-                    }
-                }
-            }
-            return { data: records.join("\n"), finalTime: currentTime };
         }
 
         function zapisBodIGC(records, lat, lon, timeSec) {
@@ -185,79 +238,162 @@
 
         // ================= KORIDOR =================
         async function spustiKoridor() {
-            loguj("<hr><b style='color:#e94560;'>Generujem KORIDOR podľa tvojej trate...</b>");
+            loguj("<hr><b style='color:#e94560;'>Generujem KORIDOR podľa trate...</b>");
             let zip = new JSZip();
             let folder = zip.folder("Testovacie_Lety_Koridor");
 
-            // Scenáre pre koridor
+            let windDir = parseInt(document.getElementById('wind-dir').value);
+            let windSpeed = parseInt(document.getElementById('wind-speed').value);
+
+            let startBod = nahraneBody.find(b => b.nazov.includes("START"));
+            let cielBod = nahraneBody.find(b => b.nazov.includes("CIEL"));
+            let otocaky = nahraneBody.filter(b => b.typ === "point");
+
+            let startVectors = getGateVectors(startBod);
+            let cielVectors = getGateVectors(cielBod);
+
             const scenare = [
-                { id: "01", meno: "Perfektny", speed: 50, off: 0, loop: false, popis: "Letí stredom (50 km/h)" },
-                { id: "02", meno: "Rychly_Stred", speed: 65, off: 0, loop: false, popis: "Letí rýchlo (65 km/h) - Dobre na test deklarácie" },
-                { id: "03", meno: "Pomaly_Stred", speed: 35, off: 0, loop: false, popis: "Letí pomaly (35 km/h) - Dobre na test deklarácie" },
-                { id: "04", meno: "Mimo_Koridor", speed: 55, off: 150, loop: false, popis: "Letí 150m vedľa trate (dostane penále)" },
-                { id: "05", meno: "Reze_Zatacky", speed: 60, off: -100, loop: false, popis: "Skracuje zákruty" },
-                { id: "06", meno: "Slucka_Disk", speed: 45, off: 0, loop: true, popis: "Spraví 360° slučku (DNF)" },
-                { id: "07", meno: "Extrem_Rychly", speed: 75, off: 0, loop: false, popis: "Extrémna rýchlosť" },
-                { id: "08", meno: "Trochu_Mimo", speed: 48, off: 80, loop: false, popis: "Líže okraj trate" }
+                { id: "01", meno: "Perfektny", speed: 50, off: 0 },
+                { id: "02", meno: "Rychly", speed: 65, off: 0 },
+                { id: "03", meno: "Pomaly", speed: 35, off: 0 },
+                { id: "04", meno: "Mimo_Trate", speed: 55, off: 150 },
+                { id: "05", meno: "Skracuje", speed: 60, off: -100 }
             ];
 
-            // Ak má trať aspoň 3 body, jednému pilotovi vymažeme vnútorný bod (minie otočák)
-            let orezanaTrasa = [...nahraneBody];
-            if (orezanaTrasa.length > 3) {
-                orezanaTrasa.splice(1, 1); 
-            }
+            scenare.forEach((sc) => {
+                let records = [`AXXX ${sc.id}_${sc.meno}`, `HFDTE140826`, `HFPLTPILOTINCHARGE:${sc.id}_${sc.meno}`];
+                let currentTime = 0;
+                
+                // Trasa Koridoru s reálnym vzletom a pristaním
+                let trasa = [vzletPoint, startVectors.approach, startBod, startVectors.exit];
+                otocaky.forEach(o => trasa.push(o));
+                trasa.push(cielVectors.approach, cielBod, cielVectors.exit, vzletPoint);
 
-            scenare.forEach((sc, i) => {
-                let pName = `${sc.id}_${sc.meno}`;
-                let bodyPreLet = (i === 4 && orezanaTrasa.length > 2) ? orezanaTrasa : nahraneBody; // Pilot 5 minie bod
-                
-                let gen = letPoTrase(pName, bodyPreLet, sc.speed, sc.off, sc.loop);
-                folder.file(`${pName}.igc`, gen.data);
-                
-                // Formátovanie do logu pre deklaráciu
-                let info = `✅ ${pName} | Čas letu: <b>${formatCas(gen.finalTime)}</b> | <i>${sc.popis}</i>`;
-                loguj(info);
+                let currentLat = trasa[0].lat; let currentLon = trasa[0].lon;
+                zapisBodIGC(records, currentLat, currentLon, currentTime);
+
+                for (let k = 1; k < trasa.length; k++) {
+                    let p2 = trasa[k];
+                    let brg = getBearing(currentLat, currentLon, p2.lat, p2.lon);
+                    let gsMs = getGroundSpeed(sc.speed, brg, windDir, windSpeed) / 3.6;
+                    let distM = dist(currentLat, currentLon, p2.lat, p2.lon);
+                    let segTime = distM / gsMs;
+
+                    for (let t = 2; t <= segTime; t += 2) {
+                        let ratio = t / segTime;
+                        let cLat = currentLat + (p2.lat - currentLat) * ratio;
+                        let cLon = currentLon + (p2.lon - currentLon) * ratio;
+                        
+                        // Ak sme v strednej časti (medzi otočákmi), pridáme odchýlku (offset)
+                        if (k > 3 && k < trasa.length - 2 && sc.off !== 0) {
+                            let normLat = -(p2.lon - currentLon) / Math.sqrt((p2.lat-currentLat)**2 + (p2.lon-currentLon)**2);
+                            let normLon = (p2.lat - currentLat) / Math.sqrt((p2.lat-currentLat)**2 + (p2.lon-currentLon)**2);
+                            cLat += (normLat * sc.off / 111320);
+                            cLon += (normLon * sc.off / (111320 * Math.cos(cLat * Math.PI / 180)));
+                        }
+
+                        currentTime += 2;
+                        zapisBodIGC(records, cLat, cLon, currentTime);
+                    }
+                    currentLat = p2.lat; currentLon = p2.lon;
+                }
+
+                folder.file(`${sc.id}_${sc.meno}.igc`, records.join("\n"));
+                loguj(`✅ ${sc.id}_${sc.meno} | Rýchlosť vz.: ${sc.speed}km/h | Odchýlka: ${sc.off}m`);
             });
 
             zip.generateAsync({type:"blob"}).then(function(c) { saveAs(c, "Testovacie_Lety_Koridor.zip"); loguj("🎉 Stiahnuté!"); });
         }
 
-
         // ================= SCORE HUNTER =================
-        async function spustiScoreHunter() {
-            loguj("<hr><b style='color:#008CBA;'>Generujem SCORE HUNTER podľa tvojich bodov...</b>");
-            let zip = new JSZip();
-            let folder = zip.folder("Testovacie_Lety_ScoreHunter");
-
+        async function spustiScoreHunterAI() {
             let startBod = nahraneBody.find(b => b.nazov.includes("START"));
             let cielBod = nahraneBody.find(b => b.nazov.includes("CIEL"));
-            let otocaky = nahraneBody.filter(b => !b.nazov.includes("START") && !b.nazov.includes("CIEL"));
+            let otocaky = nahraneBody.filter(b => b.typ === "point");
 
-            if (!startBod || !cielBod) {
-                alert("GPX pre Score Hunter MUSÍ obsahovať bod s názvom START a bod s názvom CIEL!");
-                return;
-            }
+            if (!startBod || !cielBod) { alert("GPX neobsahuje brány START a CIEL!"); return; }
 
-            for(let i=0; i<15; i++) {
-                let rychlostKmh = Math.floor(Math.random() * 25) + 35; // 35 až 60 km/h
+            let windDir = parseInt(document.getElementById('wind-dir').value);
+            let windSpeed = parseInt(document.getElementById('wind-speed').value);
+            let limitSec = 60 * 60; // 60 minút
+
+            loguj(`<hr><b style='color:#008CBA;'>Vypúšťam 15 pilotov zo zvolenej lúky...</b>`);
+            let zip = new JSZip();
+            let folder = zip.folder("ScoreHunter_Zavod");
+
+            let startVectors = getGateVectors(startBod);
+            let cielVectors = getGateVectors(cielBod);
+
+            for(let i = 0; i < 15; i++) {
                 let pMeno = `${String(i+1).padStart(2,'0')}_${menaPilotov[i]}`;
+                let airSpeed = Math.floor(Math.random() * 21) + 40; 
+                let isGreedy = Math.random() > 0.6; 
                 
-                // Namiešanie náhodnej trasy pre každého pilota
-                let shuffleBody = [...otocaky].sort(() => 0.5 - Math.random());
+                let records = [`AXXX ${pMeno}`, `HFDTE140826`, `HFPLTPILOTINCHARGE:${pMeno}`];
+                let currentTime = 0;
                 
-                // Niekto zoberie 2 body, niekto všetky
-                let pocetBodovNaOblet = Math.floor(Math.random() * otocaky.length) + 1;
-                if(i===0) pocetBodovNaOblet = otocaky.length; // Prvý obletí všetky pre istotu
-                
-                let osobnaTrasa = [startBod, ...shuffleBody.slice(0, pocetBodovNaOblet), cielBod];
-                
-                let gen = letPoTrase(pMeno, osobnaTrasa, rychlostKmh, 0, false);
-                folder.file(`${pMeno}.igc`, gen.data);
-                
-                loguj(`🎯 ${pMeno} | Rýchlosť: ${rychlostKmh} km/h | Letel na ${pocetBodovNaOblet} bodov | Čas v lufte: <b>${formatCas(gen.finalTime)}</b>`);
+                let trasa = [];
+                // NÁŠ DOPLNOK: ŠTARTUJÚ Z FYZICKEJ LÚKY A LETIA NA BRÁNU!
+                trasa.push(vzletPoint, startVectors.approach, startBod, startVectors.exit);
+
+                let availablePoints = [...otocaky].sort(() => 0.5 - Math.random());
+                let currentPos = startVectors.exit;
+                let flightTimeEst = 0; // Odhad času čisto na SCORE HUNTER (medzi bránami)
+
+                for (let j = 0; j < availablePoints.length; j++) {
+                    let target = availablePoints[j];
+                    
+                    let brgToTarget = getBearing(currentPos.lat, currentPos.lon, target.lat, target.lon);
+                    let gsToTarget = getGroundSpeed(airSpeed, brgToTarget, windDir, windSpeed) / 3.6;
+                    let timeToTarget = dist(currentPos.lat, currentPos.lon, target.lat, target.lon) / gsToTarget;
+
+                    let brgToCiel = getBearing(target.lat, target.lon, cielVectors.approach.lat, cielVectors.approach.lon);
+                    let gsToCiel = getGroundSpeed(airSpeed, brgToCiel, windDir, windSpeed) / 3.6;
+                    let timeToCiel = dist(target.lat, target.lon, cielVectors.approach.lat, cielVectors.approach.lon) / gsToCiel;
+
+                    let projectedTotalTime = flightTimeEst + timeToTarget + timeToCiel;
+
+                    if (projectedTotalTime > limitSec) {
+                        if (isGreedy && Math.random() > 0.5 && projectedTotalTime < limitSec + 900) {
+                        } else {
+                            break; 
+                        }
+                    }
+
+                    trasa.push(target);
+                    flightTimeEst += timeToTarget;
+                    currentPos = target;
+                }
+
+                // KONIEC ZÁVODU: Preťatie brány a PRISTÁTIE na lúku
+                trasa.push(cielVectors.approach, cielBod, cielVectors.exit, vzletPoint);
+
+                let currentLat = trasa[0].lat; let currentLon = trasa[0].lon;
+                zapisBodIGC(records, currentLat, currentLon, currentTime);
+
+                for (let k = 1; k < trasa.length; k++) {
+                    let p2 = trasa[k];
+                    let brg = getBearing(currentLat, currentLon, p2.lat, p2.lon);
+                    let gsMs = getGroundSpeed(airSpeed, brg, windDir, windSpeed) / 3.6;
+                    
+                    let distM = dist(currentLat, currentLon, p2.lat, p2.lon);
+                    let segTime = distM / gsMs;
+
+                    for (let t = 2; t <= segTime; t += 2) {
+                        let ratio = t / segTime;
+                        let cLat = currentLat + (p2.lat - currentLat) * ratio;
+                        let cLon = currentLon + (p2.lon - currentLon) * ratio;
+                        currentTime += 2;
+                        zapisBodIGC(records, cLat, cLon, currentTime);
+                    }
+                    currentLat = p2.lat; currentLon = p2.lon;
+                }
+
+                folder.file(`${pMeno}.igc`, records.join("\n"));
+                loguj(`🎯 ${pMeno} | Rýchlosť: ${airSpeed}km/h | Nazbieral: ${trasa.length - 8} bodov.`);
             }
 
-            zip.generateAsync({type:"blob"}).then(function(c) { saveAs(c, "Test_ScoreHunter.zip"); loguj("🎉 Lety stiahnuté!"); });
+            zip.generateAsync({type:"blob"}).then(function(c) { saveAs(c, "Testovacie_Lety_ScoreHunter.zip"); loguj("🎉 IGC Lety úspešne stiahnuté!"); });
         }
     </script>
 </body>
