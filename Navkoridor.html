@@ -531,6 +531,8 @@
                 if (maCas) {
                     let activeTrack = trackPoints.slice(idxStart, idxCiel + 1);
                     
+                    // 🛑 KONTROLA 360 OTOČKY DOČASNE VYPNUTÁ 🛑
+                    /*
                     for(let i = 1; i < activeTrack.length; i++) {
                         for(let j = 1; j < i - 15; j++) {
                             if (ciarySaPretinaju([activeTrack[i-1].lat, activeTrack[i-1].lon], [activeTrack[i].lat, activeTrack[i].lon], [activeTrack[j-1].lat, activeTrack[j-1].lon], [activeTrack[j].lat, activeTrack[j].lon])) {
@@ -539,6 +541,7 @@
                         }
                         if (maSlucku) break;
                     }
+                    */
 
                     for(let i = 1; i < activeTrack.length; i++) {
                         let pt = activeTrack[i]; let minDist = Infinity;
